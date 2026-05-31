@@ -195,6 +195,12 @@ export function TherapistDashboard() {
                 <Bell className="h-4 w-4 text-blue-600" />
                 Notifications
               </CardTitle>
+              <Link
+                href="/therapist/notifications"
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                View all
+              </Link>
             </CardHeader>
             <CardContent>
               {notifications.length === 0 ? (

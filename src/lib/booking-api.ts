@@ -46,6 +46,9 @@ export async function listBookings(params: ListBookingsParams = {}): Promise<Pag
   if (params.dateFrom) searchParams.set('dateFrom', params.dateFrom);
   if (params.dateTo) searchParams.set('dateTo', params.dateTo);
   if (params.sort) searchParams.set('sort', params.sort);
+  if (params.excludeStatuses?.length) {
+    searchParams.set('excludeStatuses', params.excludeStatuses.join(','));
+  }
   const qs = searchParams.toString();
   return apiRequestPaginated<Booking>(`/bookings${qs ? `?${qs}` : ''}`);
 }
@@ -59,9 +62,19 @@ export async function restoreBooking(id: string): Promise<{ booking: Booking }> 
   return apiRequest<{ booking: Booking }>(`/bookings/${id}/restore`, { method: 'PATCH' });
 }
 
+export async function updateBookingNotes(
+  id: string,
+  notes: string | null,
+): Promise<{ booking: Booking }> {
+  return apiRequest<{ booking: Booking }>(`/bookings/${id}/notes`, {
+    method: 'PATCH',
+    body: { notes },
+  });
+}
+
 export async function fetchBookingsForDate(date: Date, limit = 100): Promise<Booking[]> {
   const result = await apiRequestPaginated<Booking>(
-    `/bookings?dateFrom=${encodeURIComponent(startOfDay(date).toISOString())}&dateTo=${encodeURIComponent(endOfDay(date).toISOString())}&limit=${limit}`,
+    `/bookings?dateFrom=${encodeURIComponent(startOfDay(date).toISOString())}&dateTo=${encodeURIComponent(endOfDay(date).toISOString())}&limit=${limit}&excludeStatuses=RESCHEDULED,CANCELLED,NO_SHOW`,
   );
   return result.data;
 }
@@ -149,7 +162,7 @@ export async function fetchBookingsForDateRange(
   limit = 100,
 ): Promise<Booking[]> {
   const result = await apiRequestPaginated<Booking>(
-    `/bookings?dateFrom=${encodeURIComponent(dateFrom.toISOString())}&dateTo=${encodeURIComponent(dateTo.toISOString())}&limit=${limit}`,
+    `/bookings?dateFrom=${encodeURIComponent(dateFrom.toISOString())}&dateTo=${encodeURIComponent(dateTo.toISOString())}&limit=${limit}&excludeStatuses=RESCHEDULED,CANCELLED,NO_SHOW`,
   );
   return result.data;
 }

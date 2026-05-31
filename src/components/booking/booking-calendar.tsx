@@ -395,6 +395,10 @@ export function BookingCalendar({ lockedTherapistId, hideTitle }: BookingCalenda
           setCancelOpen(true);
         }}
         viewerRole={lockedTherapistId ? 'therapist' : 'admin'}
+        onNotesSaved={(updated) => {
+          setSelectedBooking(updated);
+          setBookings((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+        }}
       />
 
       <BookingFormModal
@@ -417,7 +421,13 @@ export function BookingCalendar({ lockedTherapistId, hideTitle }: BookingCalenda
         booking={selectedBooking}
         therapists={therapists}
         rooms={rooms}
-        onSuccess={() => void loadData()}
+        onSuccess={(newStartTime) => {
+          if (newStartTime) {
+            setSelectedDate(new Date(newStartTime));
+          } else {
+            void loadData();
+          }
+        }}
       />
 
       <CancelBookingDialog

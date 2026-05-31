@@ -3,6 +3,7 @@
 import {
   AppointmentListFilters,
   DEFAULT_APPOINTMENT_FILTERS,
+  DEFAULT_EXCLUDED_APPOINTMENT_STATUSES,
   type AppointmentListFiltersState,
 } from '@/components/appointment-list/appointment-list-filters';
 import { AppointmentListCard } from '@/components/appointment-list/appointment-list-card';
@@ -76,6 +77,10 @@ export function AppointmentList() {
         therapistId: filters.therapistId || undefined,
         therapyId: filters.therapyId || undefined,
         statusGroup: filters.statusGroup !== 'ALL' ? filters.statusGroup : undefined,
+        excludeStatuses:
+          filters.statusGroup === 'ALL' && filters.quickFilter === 'all'
+            ? [...DEFAULT_EXCLUDED_APPOINTMENT_STATUSES]
+            : undefined,
         quickFilter: filters.quickFilter,
         dateFrom: filters.dateFrom
           ? startOfDay(parseDateInput(filters.dateFrom)).toISOString()

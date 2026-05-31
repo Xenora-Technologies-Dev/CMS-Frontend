@@ -273,6 +273,7 @@ export interface ListBookingsParams {
   dateFrom?: string;
   dateTo?: string;
   sort?: 'default' | 'date_asc' | 'date_desc';
+  excludeStatuses?: BookingStatus[];
 }
 
 export interface CreateBookingPayload {

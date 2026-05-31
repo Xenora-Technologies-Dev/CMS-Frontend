@@ -2,6 +2,6 @@
 
 import { NotificationsPage } from '@/components/notifications/notifications-page';
 
-export function AdminNotificationsPage() {
+export function TherapistNotificationsPage() {
   return <NotificationsPage />;
 }

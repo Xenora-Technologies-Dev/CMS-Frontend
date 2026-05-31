@@ -53,7 +53,7 @@ interface BookingRescheduleModalProps {
   booking: Booking | null;
   therapists: Therapist[];
   rooms: Room[];
-  onSuccess: () => void;
+  onSuccess: (newStartTime?: string) => void;
 }
 
 export function BookingRescheduleModal({
@@ -178,7 +178,7 @@ export function BookingRescheduleModal({
         roomId,
       });
       onOpenChange(false);
-      onSuccess();
+      onSuccess(combineDateAndTime(parseDateInput(dateValue), time).toISOString());
     } catch (err) {
       if (err instanceof ApiRequestError) {
         setConflictDetails(parseConflictDetails(err));

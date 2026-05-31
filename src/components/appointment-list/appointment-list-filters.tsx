@@ -208,3 +208,10 @@ export const DEFAULT_APPOINTMENT_FILTERS: AppointmentListFiltersState = {
   dateTo: '',
   quickFilter: 'all',
 };
+
+/** Statuses hidden from default appointment list (superseded / inactive bookings). */
+export const DEFAULT_EXCLUDED_APPOINTMENT_STATUSES = [
+  'RESCHEDULED',
+  'CANCELLED',
+  'NO_SHOW',
+] as const;

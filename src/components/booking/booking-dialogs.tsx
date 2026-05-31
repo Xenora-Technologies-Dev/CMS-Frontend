@@ -31,9 +31,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { AppointmentSlipDialog } from '@/components/booking/appointment-slip';
 import { useClinicOptional } from '@/components/providers/clinic-provider';
 import { formatDateTime, formatUserName } from '@/lib/appointment-list-utils';
-import { fetchBookingAudits } from '@/lib/booking-api';
-import type { AppointmentAudit } from '@/lib/types';
-import { ExternalLink, FileText, RotateCcw } from 'lucide-react';
+import { fetchBookingAudits, fetchPatientBookings, updateBookingNotes } from '@/lib/booking-api';
+import type { AppointmentAudit, Booking } from '@/lib/types';
+import { ExternalLink, FileText, History, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
@@ -468,7 +468,7 @@ export function CancelBookingDialog({ open, onOpenChange, onSubmit }: CancelBook
 }
 
 interface BookingDetailDialogProps {
-  booking: import('@/lib/types').Booking | null;
+  booking: Booking | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onEdit: () => void;
@@ -477,6 +477,8 @@ interface BookingDetailDialogProps {
   onRestore?: () => void;
   /** When set, hides admin-only actions and uses read-only therapist view. */
   viewerRole?: 'admin' | 'therapist';
+  /** Called after therapist saves appointment notes. */
+  onNotesSaved?: (booking: Booking) => void;
 }
 
 export function BookingDetailDialog({
@@ -488,9 +490,14 @@ export function BookingDetailDialog({
   onCancel,
   onRestore,
   viewerRole = 'admin',
+  onNotesSaved,
 }: BookingDetailDialogProps) {
   const [slipOpen, setSlipOpen] = useState(false);
   const [audits, setAudits] = useState<AppointmentAudit[]>([]);
+  const [patientHistory, setPatientHistory] = useState<Booking[]>([]);
+  const [notesDraft, setNotesDraft] = useState('');
+  const [notesSaving, setNotesSaving] = useState(false);
+  const [notesError, setNotesError] = useState<string | null>(null);
   const clinicContext = useClinicOptional();
 
   useEffect(() => {
@@ -511,10 +518,61 @@ export function BookingDetailDialog({
     };
   }, [open, booking, viewerRole]);
 
+  useEffect(() => {
+    if (!open || !booking || viewerRole !== 'therapist') {
+      setPatientHistory([]);
+      return;
+    }
+    setNotesDraft(booking.notes ?? '');
+    setNotesError(null);
+    let cancelled = false;
+    void fetchPatientBookings(booking.patientId, 20)
+      .then((rows) => {
+        if (!cancelled) {
+          setPatientHistory(
+            rows
+              .filter(
+                (b) =>
+                  b.id !== booking.id &&
+                  !['RESCHEDULED', 'CANCELLED', 'NO_SHOW'].includes(b.status),
+              )
+              .slice(0, 8),
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setPatientHistory([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, booking, viewerRole]);
+
+  async function handleSaveNotes() {
+    if (!booking) return;
+    setNotesSaving(true);
+    setNotesError(null);
+    try {
+      const { booking: updated } = await updateBookingNotes(
+        booking.id,
+        notesDraft.trim() || null,
+      );
+      setNotesDraft(updated.notes ?? '');
+      onNotesSaved?.(updated);
+    } catch (err) {
+      setNotesError(err instanceof Error ? err.message : 'Failed to save notes');
+    } finally {
+      setNotesSaving(false);
+    }
+  }
+
   if (!booking) return null;
 
   const isTherapistView = viewerRole === 'therapist';
   const canModify = !isTherapistView && ['SCHEDULED', 'CONFIRMED'].includes(booking.status);
+  const canAddNotes =
+    isTherapistView &&
+    ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED'].includes(booking.status);
 
   return (
     <>
@@ -563,10 +621,65 @@ export function BookingDetailDialog({
               <dt className="shrink-0 text-muted-foreground">Duration</dt>
               <dd className="text-right font-medium">{booking.durationMinutes} min</dd>
             </div>
-            {booking.notes && (
+            {!isTherapistView && (
               <div>
                 <dt className="text-muted-foreground">Notes</dt>
-                <dd className="mt-1">{booking.notes}</dd>
+                <dd className="mt-1">{booking.notes || 'No notes recorded.'}</dd>
+              </div>
+            )}
+            {isTherapistView && (
+              <div className="border-t pt-3">
+                <dt className="mb-2 font-medium text-slate-700">Session Notes</dt>
+                <dd className="space-y-2">
+                  <Textarea
+                    id="therapist-notes"
+                    value={notesDraft}
+                    onChange={(e) => setNotesDraft(e.target.value)}
+                    placeholder="Add clinical or session notes visible to admin…"
+                    rows={4}
+                    disabled={!canAddNotes || notesSaving}
+                  />
+                  {notesError && <p className="text-sm text-destructive">{notesError}</p>}
+                  {canAddNotes && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={notesSaving || notesDraft === (booking.notes ?? '')}
+                      onClick={() => void handleSaveNotes()}
+                    >
+                      {notesSaving ? 'Saving…' : 'Save Notes'}
+                    </Button>
+                  )}
+                  {!canAddNotes && (
+                    <p className="text-xs text-muted-foreground">
+                      Notes cannot be edited for this appointment status.
+                    </p>
+                  )}
+                </dd>
+              </div>
+            )}
+            {isTherapistView && patientHistory.length > 0 && (
+              <div className="border-t pt-3">
+                <dt className="mb-2 flex items-center gap-1.5 font-medium text-slate-700">
+                  <History className="h-4 w-4" />
+                  Patient Visit History
+                </dt>
+                <dd className="max-h-48 space-y-2 overflow-y-auto text-xs">
+                  {patientHistory.map((visit) => (
+                    <div key={visit.id} className="rounded border bg-slate-50 p-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium">{visit.therapy.name}</span>
+                        <BookingStatusBadge status={visit.status} />
+                      </div>
+                      <p className="text-muted-foreground">{formatDateTime(visit.startTime)}</p>
+                      {visit.notes && (
+                        <p className="mt-1 text-slate-700">
+                          <span className="font-medium">Notes:</span> {visit.notes}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </dd>
               </div>
             )}
             {booking.cancellationReason && (
