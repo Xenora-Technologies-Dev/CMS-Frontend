@@ -16,6 +16,7 @@ import { BookingRescheduleModal } from '@/components/booking/booking-reschedule-
 import { PaginationControls } from '@/components/shared/pagination-controls';
 import {
   cancelBooking,
+  completeBooking,
   listBookings,
   restoreBooking,
 } from '@/lib/booking-api';
@@ -170,6 +171,12 @@ export function AppointmentList() {
     await loadBookings();
   }
 
+  async function handleComplete(booking: Booking) {
+    if (!confirm('Mark this appointment as completed?')) return;
+    await completeBooking(booking.id);
+    await loadBookings();
+  }
+
   return (
     <div className="space-y-4">
       <AppointmentListFilters
@@ -207,6 +214,7 @@ export function AppointmentList() {
               onPostpone={handlePostpone}
               onCancel={handleCancel}
               onRestore={handleRestore}
+              onComplete={handleComplete}
             />
           ))}
         </div>
@@ -241,6 +249,14 @@ export function AppointmentList() {
           selectedBooking?.status === 'CANCELLED'
             ? () => {
                 void handleRestore(selectedBooking);
+                setDetailOpen(false);
+              }
+            : undefined
+        }
+        onComplete={
+          selectedBooking && ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS'].includes(selectedBooking.status)
+            ? () => {
+                void handleComplete(selectedBooking);
                 setDetailOpen(false);
               }
             : undefined

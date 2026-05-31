@@ -33,7 +33,7 @@ import { useClinicOptional } from '@/components/providers/clinic-provider';
 import { formatDateTime, formatUserName } from '@/lib/appointment-list-utils';
 import { fetchBookingAudits, fetchPatientBookings, updateBookingNotes } from '@/lib/booking-api';
 import type { AppointmentAudit, Booking } from '@/lib/types';
-import { ExternalLink, FileText, History, RotateCcw } from 'lucide-react';
+import { ExternalLink, FileText, History, RotateCcw, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
@@ -475,6 +475,7 @@ interface BookingDetailDialogProps {
   onReschedule: () => void;
   onCancel: () => void;
   onRestore?: () => void;
+  onComplete?: () => void;
   /** When set, hides admin-only actions and uses read-only therapist view. */
   viewerRole?: 'admin' | 'therapist';
   /** Called after therapist saves appointment notes. */
@@ -489,6 +490,7 @@ export function BookingDetailDialog({
   onReschedule,
   onCancel,
   onRestore,
+  onComplete,
   viewerRole = 'admin',
   onNotesSaved,
 }: BookingDetailDialogProps) {
@@ -570,6 +572,10 @@ export function BookingDetailDialog({
 
   const isTherapistView = viewerRole === 'therapist';
   const canModify = !isTherapistView && ['SCHEDULED', 'CONFIRMED'].includes(booking.status);
+  const canComplete =
+    !isTherapistView &&
+    onComplete &&
+    ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS'].includes(booking.status);
   const canAddNotes =
     isTherapistView &&
     ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED'].includes(booking.status);
@@ -767,6 +773,12 @@ export function BookingDetailDialog({
               <Button variant="outline" className="w-full" onClick={onRestore}>
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Restore Appointment
+              </Button>
+            )}
+            {canComplete && (
+              <Button variant="default" className="w-full" onClick={onComplete}>
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Mark Completed
               </Button>
             )}
           </DialogFooter>

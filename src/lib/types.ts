@@ -19,6 +19,27 @@ export interface AuthUser {
   therapistId?: string | null;
 }
 
+export interface UserListItem {
+  id: string;
+  clinicId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone?: string | null;
+  role: UserRole;
+  isActive: boolean;
+  lastLoginAt?: string | null;
+  therapistId?: string | null;
+}
+
+export interface CreateAdminPayload {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+}
+
 export interface LoginResponse {
   user: AuthUser;
   accessToken: string;
@@ -284,6 +305,7 @@ export interface CreateBookingPayload {
   patientInsuranceId?: string;
   startTime: string;
   notes?: string;
+  overrideScheduleConstraints?: boolean;
 }
 
 export interface UpdateBookingPayload {

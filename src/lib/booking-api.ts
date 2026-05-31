@@ -1,4 +1,5 @@
 import { apiRequest, apiRequestPaginated } from './api';
+import { dedupeRequest } from './request-cache';
 import type {
   AuthUser,
   Booking,
@@ -20,7 +21,7 @@ import type {
 import { endOfDay, startOfDay } from './utils';
 
 export async function login(payload: {
-  email: string;
+  identifier: string;
   password: string;
 }): Promise<LoginResponse> {
   return apiRequest<LoginResponse>('/auth/login', { method: 'POST', body: payload, auth: false });
@@ -114,37 +115,77 @@ export async function cancelBooking(
   });
 }
 
+export async function completeBooking(
+  id: string,
+  notes?: string,
+): Promise<{ booking: Booking }> {
+  return apiRequest<{ booking: Booking }>(`/bookings/${id}/complete`, {
+    method: 'PATCH',
+    body: notes !== undefined ? { notes } : {},
+  });
+}
+
 export async function fetchPatients(limit = 100): Promise<Patient[]> {
-  const result = await apiRequestPaginated<Patient>(
-    `/patients?limit=${limit}&isActive=true`,
+  const result = await dedupeRequest(`patients-active-${limit}`, () =>
+    apiRequestPaginated<Patient>(`/patients?limit=${limit}&isActive=true&compact=true`),
   );
   return result.data;
 }
 
 export async function fetchTherapists(limit = 100): Promise<Therapist[]> {
-  const result = await apiRequestPaginated<Therapist>(
-    `/therapists?limit=${limit}&isActive=true`,
+  const result = await dedupeRequest(`therapists-active-${limit}`, () =>
+    apiRequestPaginated<Therapist>(`/therapists?limit=${limit}&isActive=true`),
   );
   return result.data;
 }
 
 export async function fetchRooms(limit = 100): Promise<Room[]> {
-  const result = await apiRequestPaginated<Room>(`/rooms?limit=${limit}&isActive=true`);
-  return result.data;
-}
-
-export async function fetchTherapies(limit = 100): Promise<Therapy[]> {
-  const result = await apiRequestPaginated<Therapy>(
-    `/therapies?limit=${limit}&isActive=true`,
+  const result = await dedupeRequest(`rooms-active-${limit}`, () =>
+    apiRequestPaginated<Room>(`/rooms?limit=${limit}&isActive=true`),
   );
   return result.data;
 }
 
-export async function searchPatients(query: string, limit = 20): Promise<Patient[]> {
-  const params = new URLSearchParams({ limit: String(limit), isActive: 'true' });
-  if (query.trim()) params.set('search', query.trim());
-  const result = await apiRequestPaginated<Patient>(`/patients?${params.toString()}`);
+export async function fetchTherapies(limit = 100): Promise<Therapy[]> {
+  const result = await dedupeRequest(`therapies-active-${limit}`, () =>
+    apiRequestPaginated<Therapy>(`/therapies?limit=${limit}&isActive=true`),
+  );
   return result.data;
+}
+
+export interface PatientSearchResult {
+  patients: Patient[];
+  hasMore: boolean;
+  total: number;
+}
+
+const PATIENT_SEARCH_PAGE_SIZE = 50;
+
+export async function searchPatients(
+  query: string,
+  page = 1,
+  limit = PATIENT_SEARCH_PAGE_SIZE,
+): Promise<PatientSearchResult> {
+  const trimmed = query.trim();
+  const params = new URLSearchParams({
+    limit: String(limit),
+    page: String(page),
+    isActive: 'true',
+    compact: 'true',
+  });
+  if (trimmed) params.set('search', trimmed);
+
+  const cacheKey = `patient-search:${trimmed}:${page}:${limit}`;
+  const result = await dedupeRequest(cacheKey, () =>
+    apiRequestPaginated<Patient>(`/patients?${params.toString()}`),
+  );
+
+  const { page: currentPage, totalPages, total } = result.meta;
+  return {
+    patients: result.data,
+    hasMore: currentPage < totalPages,
+    total,
+  };
 }
 
 export async function fetchTherapistAvailability(

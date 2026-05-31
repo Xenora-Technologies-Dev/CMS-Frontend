@@ -6,6 +6,7 @@ export interface ListPatientsParams {
   limit?: number;
   search?: string;
   isActive?: boolean;
+  compact?: boolean;
 }
 
 export interface CreatePatientPayload {
@@ -33,6 +34,7 @@ function buildQuery(params: ListPatientsParams): string {
   if (params.limit) qs.set('limit', String(params.limit));
   if (params.search?.trim()) qs.set('search', params.search.trim());
   if (params.isActive !== undefined) qs.set('isActive', String(params.isActive));
+  if (params.compact) qs.set('compact', 'true');
   return qs.toString();
 }
 

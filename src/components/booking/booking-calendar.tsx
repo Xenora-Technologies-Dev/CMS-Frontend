@@ -2,8 +2,8 @@
 
 import {
   cancelBooking,
+  completeBooking,
   fetchBookingsForDate,
-  searchPatients,
 } from '@/lib/booking-api';
 import { listRooms } from '@/lib/room-api';
 import { listTherapists } from '@/lib/therapist-api';
@@ -208,6 +208,14 @@ export function BookingCalendar({ lockedTherapistId, hideTitle }: BookingCalenda
     await loadData();
   }
 
+  async function handleComplete() {
+    if (!selectedBooking) return;
+    if (!confirm('Mark this appointment as completed?')) return;
+    await completeBooking(selectedBooking.id);
+    setDetailOpen(false);
+    await loadData();
+  }
+
   const dateLabel = selectedDate.toLocaleDateString('en-GB', {
     weekday: 'long',
     day: 'numeric',
@@ -394,6 +402,7 @@ export function BookingCalendar({ lockedTherapistId, hideTitle }: BookingCalenda
           setDetailOpen(false);
           setCancelOpen(true);
         }}
+        onComplete={lockedTherapistId ? undefined : () => void handleComplete()}
         viewerRole={lockedTherapistId ? 'therapist' : 'admin'}
         onNotesSaved={(updated) => {
           setSelectedBooking(updated);

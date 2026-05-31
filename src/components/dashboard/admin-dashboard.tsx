@@ -1,11 +1,6 @@
 'use client';
 
-import {
-  fetchDashboardStats,
-  fetchRecentActivity,
-  fetchTodaysBookings,
-  fetchUpcomingBookings,
-} from '@/lib/dashboard-api';
+import { fetchAdminDashboardData } from '@/lib/dashboard-api';
 import type { ActivityItem, DashboardStats } from '@/lib/dashboard-api';
 import type { Booking } from '@/lib/types';
 import { RecentActivity } from '@/components/dashboard/recent-activity';
@@ -29,16 +24,11 @@ export function AdminDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [statsData, today, upcomingData, activityData] = await Promise.all([
-        fetchDashboardStats(),
-        fetchTodaysBookings(),
-        fetchUpcomingBookings(),
-        fetchRecentActivity(),
-      ]);
-      setStats(statsData);
-      setTodayBookings(today);
-      setUpcoming(upcomingData);
-      setActivity(activityData);
+      const data = await fetchAdminDashboardData();
+      setStats(data.stats);
+      setTodayBookings(data.todayBookings);
+      setUpcoming(data.upcoming);
+      setActivity(data.activity);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard');
     } finally {

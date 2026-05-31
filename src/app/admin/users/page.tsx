@@ -1,12 +1,15 @@
-import { AdminPagePlaceholder } from '@/components/layout/admin-page-placeholder';
-import { UsersRound } from 'lucide-react';
+import { UserList } from '@/components/user/user-list';
 
 export default function UsersPage() {
   return (
-    <AdminPagePlaceholder
-      title="Users"
-      description="Clinic staff accounts, roles, and access control."
-      icon={UsersRound}
-    />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Users</h1>
+        <p className="text-muted-foreground">
+          Manage clinic staff accounts, roles, and access control.
+        </p>
+      </div>
+      <UserList />
+    </div>
   );
 }

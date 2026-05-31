@@ -1,9 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Bell } from 'lucide-react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { useNotifications } from '@/components/providers/notifications-provider';
+import { useSocketEvent } from '@/components/providers/socket-provider';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,82 +10,34 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useSocketEvent } from '@/components/providers/socket-provider';
-import {
-  listNotifications,
-  markAllNotificationsRead,
-  markNotificationRead,
-  type Notification,
-} from '@/lib/notification-api';
-import { playNotificationSound, primeNotificationSound } from '@/lib/notification-sound';
+import { Button } from '@/components/ui/button';
 import {
   requestNotificationPermission,
   useNotificationAttention,
 } from '@/hooks/use-notification-attention';
+import { primeNotificationSound } from '@/lib/notification-sound';
 import { SocketEvents } from '@/lib/socket-events';
+import type { Notification } from '@/lib/notification-api';
 import { cn } from '@/lib/utils';
+import { Bell } from 'lucide-react';
+import Link from 'next/link';
+import { useState } from 'react';
 
 interface NotificationBellProps {
   notificationsHref: string;
 }
 
 export function NotificationBell({ notificationsHref }: NotificationBellProps) {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadTotal, setUnreadTotal] = useState(0);
+  const { notifications, unreadTotal, markRead, markAllRead } = useNotifications();
   const [open, setOpen] = useState(false);
   const [hasNewAlert, setHasNewAlert] = useState(false);
 
   const { showBrowserNotification } = useNotificationAttention(unreadTotal, hasNewAlert);
 
-  const load = useCallback(async () => {
-    try {
-      const [recent, unreadResult] = await Promise.all([
-        listNotifications({ limit: 8 }),
-        listNotifications({ limit: 1, unreadOnly: true }),
-      ]);
-      setNotifications(recent.data);
-      setUnreadTotal(unreadResult.meta.total);
-      if (unreadResult.meta.total === 0) {
-        setHasNewAlert(false);
-      }
-    } catch {
-      // Silently ignore — bell still renders
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
   useSocketEvent<Notification>(SocketEvents.NOTIFICATION, (notification) => {
-    playNotificationSound();
     setHasNewAlert(true);
     showBrowserNotification(notification);
-    setNotifications((prev) => {
-      const without = prev.filter((n) => n.id !== notification.id);
-      return [notification, ...without].slice(0, 8);
-    });
-    if (!notification.readAt) {
-      setUnreadTotal((count) => count + 1);
-    }
   });
-
-  async function handleMarkRead(id: string) {
-    await markNotificationRead(id);
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n)),
-    );
-    setUnreadTotal((count) => Math.max(0, count - 1));
-  }
-
-  async function handleMarkAllRead() {
-    await markAllNotificationsRead();
-    setNotifications((prev) =>
-      prev.map((n) => ({ ...n, readAt: n.readAt ?? new Date().toISOString() })),
-    );
-    setUnreadTotal(0);
-    setHasNewAlert(false);
-  }
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -106,11 +56,11 @@ export function NotificationBell({ notificationsHref }: NotificationBellProps) {
           size="icon"
           className={cn(
             'relative',
-            hasNewAlert && unreadTotal > 0 && 'animate-pulse ring-2 ring-primary ring-offset-2 ring-offset-background',
+            hasNewAlert &&
+              unreadTotal > 0 &&
+              'animate-pulse ring-2 ring-primary ring-offset-2 ring-offset-background',
           )}
-          aria-label={
-            unreadTotal > 0 ? `Notifications, ${unreadTotal} unread` : 'Notifications'
-          }
+          aria-label={unreadTotal > 0 ? `Notifications, ${unreadTotal} unread` : 'Notifications'}
           onClick={primeNotificationSound}
         >
           <Bell className={cn('h-5 w-5', hasNewAlert && unreadTotal > 0 && 'text-primary')} />
@@ -132,7 +82,7 @@ export function NotificationBell({ notificationsHref }: NotificationBellProps) {
             <button
               type="button"
               className="text-xs font-normal text-primary hover:underline"
-              onClick={() => void handleMarkAllRead()}
+              onClick={() => void markAllRead()}
             >
               Mark all read
             </button>
@@ -150,7 +100,7 @@ export function NotificationBell({ notificationsHref }: NotificationBellProps) {
                 !n.readAt && 'bg-primary/5',
               )}
               onClick={() => {
-                if (!n.readAt) void handleMarkRead(n.id);
+                if (!n.readAt) void markRead(n.id);
               }}
             >
               <span className={cn('text-sm font-medium', n.readAt && 'text-muted-foreground')}>

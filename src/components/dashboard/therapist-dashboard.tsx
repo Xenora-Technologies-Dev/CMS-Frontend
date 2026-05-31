@@ -1,24 +1,16 @@
 'use client';
 
+import { fetchTherapistDashboardData } from '@/lib/therapist-dashboard-api';
+import type { Booking } from '@/lib/types';
+import type { LeaveRequest } from '@/lib/leave-api';
 import { TodaySchedule } from '@/components/dashboard/today-schedule';
 import { UpcomingAppointments } from '@/components/dashboard/upcoming-appointments';
 import { LeaveStatusBadge } from '@/components/leave/leave-status-badge';
 import { useAuth } from '@/components/auth/auth-provider';
+import { useNotifications } from '@/components/providers/notifications-provider';
 import { useSocketEvent } from '@/components/providers/socket-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  fetchTherapistLeaveStatus,
-  fetchTherapistNotifications,
-  fetchTherapistTodayBookings,
-  fetchTherapistUpcomingPatients,
-} from '@/lib/therapist-dashboard-api';
-import type { Booking } from '@/lib/types';
-import type { LeaveRequest } from '@/lib/leave-api';
-import type { Notification } from '@/lib/notification-api';
-import { markNotificationRead } from '@/lib/notification-api';
-import { playNotificationSound } from '@/lib/notification-sound';
-import { getFriendlyErrorMessage } from '@/lib/error-utils';
 import { SocketEvents } from '@/lib/socket-events';
 import { Bell, CalendarDays, Palmtree, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
@@ -27,11 +19,11 @@ import { useCallback, useEffect, useState } from 'react';
 export function TherapistDashboard() {
   const { user } = useAuth();
   const therapistId = user?.therapistId;
+  const { notifications, markRead } = useNotifications();
 
   const [todayBookings, setTodayBookings] = useState<Booking[]>([]);
   const [upcoming, setUpcoming] = useState<Booking[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -44,29 +36,16 @@ export function TherapistDashboard() {
     setLoading(true);
     setErrors([]);
 
-    const results = await Promise.allSettled([
-      fetchTherapistTodayBookings(therapistId),
-      fetchTherapistUpcomingPatients(therapistId),
-      fetchTherapistLeaveStatus(therapistId),
-      fetchTherapistNotifications(),
-    ]);
-
-    const nextErrors: string[] = [];
-
-    if (results[0].status === 'fulfilled') setTodayBookings(results[0].value);
-    else nextErrors.push('Could not load today\'s schedule');
-
-    if (results[1].status === 'fulfilled') setUpcoming(results[1].value);
-    else nextErrors.push('Could not load upcoming appointments');
-
-    if (results[2].status === 'fulfilled') setLeaves(results[2].value);
-    else nextErrors.push('Could not load leave status');
-
-    if (results[3].status === 'fulfilled') setNotifications(results[3].value);
-    else nextErrors.push('Could not load notifications');
-
-    setErrors(nextErrors);
-    setLoading(false);
+    try {
+      const data = await fetchTherapistDashboardData(therapistId);
+      setTodayBookings(data.todayBookings);
+      setUpcoming(data.upcoming);
+      setLeaves(data.leaves);
+    } catch {
+      setErrors(['Could not load dashboard data']);
+    } finally {
+      setLoading(false);
+    }
   }, [therapistId]);
 
   useEffect(() => {
@@ -81,14 +60,6 @@ export function TherapistDashboard() {
     if (therapistId) void load();
   });
 
-  useSocketEvent<Notification>(SocketEvents.NOTIFICATION, (notification) => {
-    playNotificationSound();
-    setNotifications((prev) => {
-      const without = prev.filter((n) => n.id !== notification.id);
-      return [notification, ...without].slice(0, 8);
-    });
-  });
-
   useSocketEvent<LeaveRequest>(SocketEvents.LEAVE_UPDATED, (leave) => {
     if (leave.therapistId !== therapistId) return;
     setLeaves((prev) => {
@@ -99,13 +70,6 @@ export function TherapistDashboard() {
 
   const activeLeave = leaves.find((l) => l.status === 'APPROVED');
   const pendingLeave = leaves.find((l) => l.status === 'PENDING');
-
-  async function handleMarkRead(id: string) {
-    await markNotificationRead(id);
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n)),
-    );
-  }
 
   if (!therapistId && !loading) {
     return (
@@ -211,7 +175,7 @@ export function TherapistDashboard() {
                     <button
                       key={n.id}
                       type="button"
-                      onClick={() => !n.readAt && void handleMarkRead(n.id)}
+                      onClick={() => !n.readAt && void markRead(n.id)}
                       className={`w-full rounded-lg border p-3 text-left text-sm transition-colors ${
                         n.readAt ? 'bg-slate-50 opacity-70' : 'border-blue-100 bg-blue-50/50'
                       }`}

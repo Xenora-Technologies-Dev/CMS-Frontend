@@ -23,6 +23,17 @@ export function canRestoreBooking(booking: Booking): boolean {
   return booking.status === 'CANCELLED';
 }
 
+export function canCompleteBooking(booking: Booking): boolean {
+  return ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS'].includes(booking.status);
+}
+
+export function isPastDueBooking(booking: Booking): boolean {
+  return (
+    ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS'].includes(booking.status) &&
+    new Date(booking.endTime) <= new Date()
+  );
+}
+
 export function formatUserName(user?: { firstName: string; lastName: string } | null): string {
   if (!user) return '—';
   return `${user.firstName} ${user.lastName}`.trim();

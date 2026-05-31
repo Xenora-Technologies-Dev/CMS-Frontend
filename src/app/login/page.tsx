@@ -13,7 +13,7 @@ import { Stethoscope } from 'lucide-react';
 export default function LoginPage() {
   const router = useRouter();
   const { signIn } = useAuth();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -23,7 +23,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await login({ email, password });
+      const result = await login({ identifier: identifier.trim(), password });
       signIn(result.accessToken, result.user);
       if (result.user.role === 'ADMIN') {
         router.push('/admin');
@@ -65,15 +65,15 @@ export default function LoginPage() {
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="identifier">Email or mobile number</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    placeholder="you@clinic.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="identifier"
+                    type="text"
+                    placeholder="you@clinic.com or 05XXXXXXXX"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
                     className="h-11"
-                    autoComplete="email"
+                    autoComplete="username"
                     required
                   />
                 </div>

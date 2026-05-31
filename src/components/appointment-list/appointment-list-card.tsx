@@ -12,6 +12,7 @@ import {
 import type { Booking } from '@/lib/types';
 import {
   canEditBooking,
+  canCompleteBooking,
   canRestoreBooking,
   formatDateTime,
   formatUserName,
@@ -19,6 +20,7 @@ import {
 } from '@/lib/appointment-list-utils';
 import { formatTime, getPatientName, getTherapistName } from '@/lib/utils';
 import {
+  CheckCircle2,
   Calendar,
   Clock,
   DoorOpen,
@@ -40,6 +42,7 @@ interface AppointmentListCardProps {
   onPostpone?: (booking: Booking) => void;
   onCancel?: (booking: Booking) => void;
   onRestore?: (booking: Booking) => void;
+  onComplete?: (booking: Booking) => void;
 }
 
 export function AppointmentListCard({
@@ -49,9 +52,11 @@ export function AppointmentListCard({
   onPostpone,
   onCancel,
   onRestore,
+  onComplete,
 }: AppointmentListCardProps) {
   const insuranceName = booking.patientInsurance?.insuranceProvider?.name;
   const editable = canEditBooking(booking);
+  const completable = canCompleteBooking(booking);
   const restorable = canRestoreBooking(booking);
   const appointmentDate = new Date(booking.startTime).toLocaleDateString('en-GB', {
     weekday: 'short',
@@ -101,6 +106,12 @@ export function AppointmentListCard({
               <DropdownMenuItem onClick={() => onPostpone(booking)}>
                 <Calendar className="mr-2 h-4 w-4" />
                 Postpone
+              </DropdownMenuItem>
+            )}
+            {completable && onComplete && (
+              <DropdownMenuItem onClick={() => onComplete(booking)}>
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Mark Completed
               </DropdownMenuItem>
             )}
             {editable && onCancel && (

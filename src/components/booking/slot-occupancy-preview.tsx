@@ -30,11 +30,7 @@ export function SlotOccupancyPreview({ input, issues }: SlotOccupancyPreviewProp
   );
 
   if (!isReady) {
-    return (
-      <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-        Select therapist, room, therapy, date, and time to preview slot occupancy.
-      </div>
-    );
+    return null;
   }
 
   return (
