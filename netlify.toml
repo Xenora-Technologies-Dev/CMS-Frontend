@@ -1,0 +1,9 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Set NEXT_PUBLIC_API_URL in Netlify UI to your Vercel backend URL, e.g.:
+# https://your-backend.vercel.app/api/v1
