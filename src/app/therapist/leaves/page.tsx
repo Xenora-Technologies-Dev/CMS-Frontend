@@ -1,5 +1,5 @@
-import { TherapistLeaveManagement } from '@/components/leave/therapist-leave-management';
+import { redirect } from 'next/navigation';
 
-export default function TherapistLeavesPage() {
-  return <TherapistLeaveManagement />;
+export default function TherapistLeavesIndexPage() {
+  redirect('/therapist/leaves/management');
 }

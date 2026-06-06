@@ -7,6 +7,7 @@ import {
   type AppointmentListFiltersState,
 } from '@/components/appointment-list/appointment-list-filters';
 import { AppointmentListCard } from '@/components/appointment-list/appointment-list-card';
+import { BookingsNeedsAttentionPanel } from '@/components/booking/bookings-needs-attention-panel';
 import {
   CancelBookingDialog,
   BookingDetailDialog,
@@ -26,6 +27,7 @@ import { listTherapies } from '@/lib/therapy-api';
 import type { Booking, PaginatedMeta, Room, Therapist, Therapy } from '@/lib/types';
 import { parseDateInput, startOfDay, endOfDay } from '@/lib/utils';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useToast } from '@/components/providers/toast-provider';
 import { useCallback, useEffect, useState } from 'react';
 import { useSocketEvent } from '@/components/providers/socket-provider';
 import { SocketEvents } from '@/lib/socket-events';
@@ -34,6 +36,7 @@ const DEFAULT_META: PaginatedMeta = { page: 1, limit: 20, total: 0, totalPages: 
 const RESOURCE_LIMIT = 100;
 
 export function AppointmentList() {
+  const { showBookingAction } = useToast();
   const [filters, setFilters] = useState<AppointmentListFiltersState>(DEFAULT_APPOINTMENT_FILTERS);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -79,10 +82,9 @@ export function AppointmentList() {
         therapyId: filters.therapyId || undefined,
         statusGroup: filters.statusGroup !== 'ALL' ? filters.statusGroup : undefined,
         excludeStatuses:
-          filters.statusGroup === 'ALL' && filters.quickFilter === 'all'
+          filters.statusGroup === 'ALL'
             ? [...DEFAULT_EXCLUDED_APPOINTMENT_STATUSES]
             : undefined,
-        quickFilter: filters.quickFilter,
         dateFrom: filters.dateFrom
           ? startOfDay(parseDateInput(filters.dateFrom)).toISOString()
           : undefined,
@@ -106,7 +108,6 @@ export function AppointmentList() {
     filters.therapistId,
     filters.therapyId,
     filters.statusGroup,
-    filters.quickFilter,
     filters.dateFrom,
     filters.dateTo,
   ]);
@@ -127,7 +128,6 @@ export function AppointmentList() {
     filters.therapistId,
     filters.therapyId,
     filters.statusGroup,
-    filters.quickFilter,
     filters.dateFrom,
     filters.dateTo,
   ]);
@@ -158,10 +158,16 @@ export function AppointmentList() {
 
   async function handleCancelSubmit(reason: string) {
     if (!selectedBooking) return;
-    await cancelBooking(selectedBooking.id, {
+    const previous = selectedBooking;
+    const { booking: updated } = await cancelBooking(previous.id, {
       cancellationReason: reason || undefined,
     });
     setCancelOpen(false);
+    showBookingAction({
+      action: 'cancel',
+      booking: updated,
+      cancellationReason: reason || undefined,
+    });
     await loadBookings();
   }
 
@@ -179,6 +185,8 @@ export function AppointmentList() {
 
   return (
     <div className="space-y-4">
+      <BookingsNeedsAttentionPanel onActionComplete={() => void loadBookings()} />
+
       <AppointmentListFilters
         filters={filters}
         therapists={therapists}

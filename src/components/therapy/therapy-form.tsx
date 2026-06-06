@@ -34,6 +34,10 @@ export function TherapyForm({ mode, therapyId }: TherapyFormProps) {
     price: '',
     currency: 'AED',
     isActive: true,
+    isPackageBased: false,
+    packageSessions: '',
+    packageValidityDays: '',
+    packageDescription: '',
   });
   const [loading, setLoading] = useState(mode === 'edit');
   const [saving, setSaving] = useState(false);
@@ -52,6 +56,11 @@ export function TherapyForm({ mode, therapyId }: TherapyFormProps) {
         price: therapy.price != null ? String(therapy.price) : '',
         currency: therapy.currency ?? 'AED',
         isActive: therapy.isActive,
+        isPackageBased: therapy.isPackageBased ?? false,
+        packageSessions: therapy.packageSessions != null ? String(therapy.packageSessions) : '',
+        packageValidityDays:
+          therapy.packageValidityDays != null ? String(therapy.packageValidityDays) : '',
+        packageDescription: therapy.packageDescription ?? '',
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load therapy');
@@ -83,6 +92,23 @@ export function TherapyForm({ mode, therapyId }: TherapyFormProps) {
       }
     }
 
+    let packageSessions: number | undefined;
+    let packageValidityDays: number | undefined;
+    if (form.isPackageBased) {
+      packageSessions = parseInt(form.packageSessions, 10);
+      packageValidityDays = parseInt(form.packageValidityDays, 10);
+      if (Number.isNaN(packageSessions) || packageSessions < 1) {
+        setError('Number of sessions is required for package-based therapies');
+        setSaving(false);
+        return;
+      }
+      if (Number.isNaN(packageValidityDays) || packageValidityDays < 1) {
+        setError('Package validity (days) is required for package-based therapies');
+        setSaving(false);
+        return;
+      }
+    }
+
     const payload = {
       name: form.name.trim(),
       code: form.code.trim() || undefined,
@@ -90,6 +116,12 @@ export function TherapyForm({ mode, therapyId }: TherapyFormProps) {
       durationMinutes: duration,
       price,
       currency: form.currency,
+      isPackageBased: form.isPackageBased,
+      ...(form.isPackageBased && {
+        packageSessions,
+        packageValidityDays,
+        packageDescription: form.packageDescription.trim() || undefined,
+      }),
       ...(mode === 'edit' && { isActive: form.isActive }),
     };
     try {
@@ -201,6 +233,78 @@ export function TherapyForm({ mode, therapyId }: TherapyFormProps) {
                 </Select>
               </div>
             </div>
+            <div className="space-y-2">
+              <Label>Is Package Based?</Label>
+              <Select
+                value={form.isPackageBased ? 'yes' : 'no'}
+                onValueChange={(v) =>
+                  setForm((f) => ({
+                    ...f,
+                    isPackageBased: v === 'yes',
+                    ...(v === 'no' && {
+                      packageSessions: '',
+                      packageValidityDays: '',
+                      packageDescription: '',
+                    }),
+                  }))
+                }
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no">No</SelectItem>
+                  <SelectItem value="yes">Yes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {form.isPackageBased && (
+              <div className="space-y-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
+                <p className="text-sm font-medium text-slate-900">Package configuration</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="packageSessions">Number of sessions *</Label>
+                    <Input
+                      id="packageSessions"
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={form.packageSessions}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, packageSessions: e.target.value }))
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="packageValidityDays">Package validity (days) *</Label>
+                    <Input
+                      id="packageValidityDays"
+                      type="number"
+                      min={1}
+                      max={3650}
+                      value={form.packageValidityDays}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, packageValidityDays: e.target.value }))
+                      }
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="packageDescription">Package description</Label>
+                  <Textarea
+                    id="packageDescription"
+                    rows={2}
+                    value={form.packageDescription}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, packageDescription: e.target.value }))
+                    }
+                    placeholder="e.g. 10 sessions over 60 days"
+                  />
+                </div>
+              </div>
+            )}
             {mode === 'edit' && (
               <div className="space-y-2">
                 <Label>Status</Label>

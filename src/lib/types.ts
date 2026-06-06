@@ -1,4 +1,10 @@
-export type UserRole = 'ADMIN' | 'THERAPIST';
+export type UserRole = 'ADMIN' | 'THERAPIST' | 'DOCTOR';
+
+export type BookingType = 'THERAPY' | 'CONSULTATION';
+
+export type BookingMode = 'WALK_IN' | 'CALL';
+
+export type RoomType = 'THERAPY' | 'CONSULTATION';
 
 export type BookingStatus =
   | 'SCHEDULED'
@@ -7,7 +13,8 @@ export type BookingStatus =
   | 'COMPLETED'
   | 'CANCELLED'
   | 'RESCHEDULED'
-  | 'NO_SHOW';
+  | 'NO_SHOW'
+  | 'PENDING_CONFIRMATION';
 
 export interface AuthUser {
   id: string;
@@ -17,6 +24,7 @@ export interface AuthUser {
   lastName: string;
   role: UserRole;
   therapistId?: string | null;
+  doctorId?: string | null;
 }
 
 export interface UserListItem {
@@ -30,6 +38,7 @@ export interface UserListItem {
   isActive: boolean;
   lastLoginAt?: string | null;
   therapistId?: string | null;
+  doctorId?: string | null;
 }
 
 export interface CreateAdminPayload {
@@ -143,7 +152,34 @@ export interface Therapist {
   specialization?: string | null;
   consultationStartTime?: string | null;
   consultationEndTime?: string | null;
+  requiresConsultationHours?: boolean;
   user: TherapistUser;
+}
+
+export interface DoctorUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string | null;
+}
+
+export interface Doctor {
+  id: string;
+  colorCode?: string | null;
+  specialization?: string | null;
+  consultationStartTime?: string | null;
+  consultationEndTime?: string | null;
+  user: DoctorUser;
+}
+
+export interface DoctorListItem extends Doctor {
+  isActive: boolean;
+}
+
+export interface DoctorDetail extends DoctorListItem {
+  licenseNumber?: string | null;
+  bio?: string | null;
 }
 
 export interface TherapistListItem extends Therapist {
@@ -161,6 +197,7 @@ export interface Room {
   name: string;
   code?: string | null;
   floor?: string | null;
+  roomType?: RoomType;
 }
 
 export interface RoomDetail extends Room {
@@ -175,6 +212,7 @@ export interface Therapy {
   name: string;
   code?: string | null;
   durationMinutes: number;
+  isPackageBased?: boolean;
 }
 
 export interface TherapyDetail extends Therapy {
@@ -182,6 +220,41 @@ export interface TherapyDetail extends Therapy {
   price?: string | number | null;
   currency?: string | null;
   isActive: boolean;
+  packageSessions?: number | null;
+  packageValidityDays?: number | null;
+  packageDescription?: string | null;
+}
+
+export type TreatmentPlanStatus = 'ACTIVE' | 'COMPLETED' | 'EXPIRED' | 'CANCELLED';
+
+export interface TreatmentPlanSession {
+  id: string;
+  sessionNumber: number;
+  completedAt: string;
+  booking: {
+    id: string;
+    startTime: string;
+    endTime: string;
+    status: BookingStatus;
+    therapist: Therapist;
+  };
+}
+
+export interface TreatmentPlan {
+  id: string;
+  patientId: string;
+  therapyId: string;
+  totalSessions: number;
+  completedSessions: number;
+  remainingSessions: number;
+  startDate: string;
+  expiryDate: string;
+  status: TreatmentPlanStatus;
+  createdAt: string;
+  updatedAt: string;
+  therapy: TherapyDetail;
+  patient?: Patient;
+  sessions?: TreatmentPlanSession[];
 }
 
 export type DayOfWeek =
@@ -218,9 +291,12 @@ export interface Booking {
   id: string;
   clinicId: string;
   patientId: string;
-  therapistId: string;
+  bookingType: BookingType;
+  therapistId?: string | null;
+  doctorId?: string | null;
   roomId: string;
-  therapyId: string;
+  therapyId?: string | null;
+  bookingMode?: BookingMode | null;
   patientInsuranceId?: string | null;
   startTime: string;
   endTime: string;
@@ -233,9 +309,10 @@ export interface Booking {
   createdAt?: string;
   updatedAt?: string;
   patient: Patient;
-  therapist: Therapist;
+  therapist?: Therapist | null;
+  doctor?: Doctor | null;
   room: Room;
-  therapy: Therapy;
+  therapy?: Therapy | null;
   patientInsurance?: PatientInsurance | null;
   createdBy?: UserSummary | null;
   updatedBy?: UserSummary | null;
@@ -248,6 +325,14 @@ export interface Booking {
     therapistId: string;
     roomId: string;
     status: BookingStatus;
+  } | null;
+  treatmentPlan?: {
+    id: string;
+    totalSessions: number;
+    completedSessions: number;
+    remainingSessions: number;
+    expiryDate: string;
+    status: TreatmentPlanStatus;
   } | null;
 }
 
@@ -284,6 +369,8 @@ export interface ListBookingsParams {
   limit?: number;
   patientId?: string;
   therapistId?: string;
+  doctorId?: string;
+  bookingType?: BookingType;
   roomId?: string;
   therapyId?: string;
   status?: BookingStatus;
@@ -291,21 +378,41 @@ export interface ListBookingsParams {
   quickFilter?: QuickFilter;
   patientName?: string;
   patientPhone?: string;
+  therapistName?: string;
+  therapyName?: string;
   dateFrom?: string;
   dateTo?: string;
-  sort?: 'default' | 'date_asc' | 'date_desc';
+  sort?: 'default' | 'date_asc' | 'date_desc' | 'created_desc';
   excludeStatuses?: BookingStatus[];
+  recentOnly?: boolean;
 }
 
 export interface CreateBookingPayload {
+  bookingType?: BookingType;
   patientId: string;
-  therapistId: string;
+  therapistId?: string;
+  doctorId?: string;
   roomId: string;
-  therapyId: string;
+  therapyId?: string;
+  bookingMode?: BookingMode;
+  durationMinutes?: number;
   patientInsuranceId?: string;
   startTime: string;
   notes?: string;
   overrideScheduleConstraints?: boolean;
+  treatmentPlanId?: string;
+  createNewPackage?: boolean;
+}
+
+export interface PublicHoliday {
+  id: string;
+  name: string;
+  startDateTime: string;
+  endDateTime: string;
+  isFullDay: boolean;
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface UpdateBookingPayload {

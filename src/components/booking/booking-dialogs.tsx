@@ -4,11 +4,14 @@ import type { Patient, Room, Therapist, Therapy } from '@/lib/types';
 import {
   combineDateAndTime,
   formatDateInput,
+  formatTimeInputValue,
   generateTimeSlots,
+  getDoctorName,
   getPatientName,
   getTherapistName,
   parseDateInput,
 } from '@/lib/utils';
+import { canCompleteBooking } from '@/lib/appointment-list-utils';
 import { BookingStatusBadge } from '@/components/booking/booking-status-badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,9 +32,10 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { AppointmentSlipDialog } from '@/components/booking/appointment-slip';
+import { BookingCommentsThread } from '@/components/booking/booking-comments-thread';
 import { useClinicOptional } from '@/components/providers/clinic-provider';
 import { formatDateTime, formatUserName } from '@/lib/appointment-list-utils';
-import { fetchBookingAudits, fetchPatientBookings, updateBookingNotes } from '@/lib/booking-api';
+import { fetchBookingAudits, fetchPatientBookings } from '@/lib/booking-api';
 import type { AppointmentAudit, Booking } from '@/lib/types';
 import { ExternalLink, FileText, History, RotateCcw, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
@@ -101,7 +105,7 @@ export function BookingFormDialog({
         ? new Date(initialValues.startTime).toLocaleTimeString('en-GB', {
             hour: '2-digit',
             minute: '2-digit',
-            hour12: false,
+            hour12: true,
           })
         : '09:00',
     );
@@ -227,7 +231,7 @@ export function BookingFormDialog({
                 <SelectContent>
                   {timeSlots.map((slot) => (
                     <SelectItem key={slot} value={slot}>
-                      {slot}
+                      {formatTimeInputValue(slot)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -304,7 +308,7 @@ export function RescheduleBookingDialog({
       start.toLocaleTimeString('en-GB', {
         hour: '2-digit',
         minute: '2-digit',
-        hour12: false,
+        hour12: true,
       }),
     );
     setError(null);
@@ -353,7 +357,7 @@ export function RescheduleBookingDialog({
               <SelectContent>
                 {timeSlots.map((slot) => (
                   <SelectItem key={slot} value={slot}>
-                    {slot}
+                    {formatTimeInputValue(slot)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -471,15 +475,15 @@ interface BookingDetailDialogProps {
   booking: Booking | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onEdit: () => void;
-  onReschedule: () => void;
-  onCancel: () => void;
+  onEdit?: () => void;
+  onReschedule?: () => void;
+  onCancel?: () => void;
   onRestore?: () => void;
   onComplete?: () => void;
-  /** When set, hides admin-only actions and uses read-only therapist view. */
-  viewerRole?: 'admin' | 'therapist';
-  /** Called after therapist saves appointment notes. */
-  onNotesSaved?: (booking: Booking) => void;
+  /** When set, hides admin-only actions and uses read-only staff view. */
+  viewerRole?: 'admin' | 'therapist' | 'doctor';
+  /** Called after a comment is posted on the booking. */
+  onCommentPosted?: () => void;
 }
 
 export function BookingDetailDialog({
@@ -492,18 +496,15 @@ export function BookingDetailDialog({
   onRestore,
   onComplete,
   viewerRole = 'admin',
-  onNotesSaved,
+  onCommentPosted,
 }: BookingDetailDialogProps) {
   const [slipOpen, setSlipOpen] = useState(false);
   const [audits, setAudits] = useState<AppointmentAudit[]>([]);
   const [patientHistory, setPatientHistory] = useState<Booking[]>([]);
-  const [notesDraft, setNotesDraft] = useState('');
-  const [notesSaving, setNotesSaving] = useState(false);
-  const [notesError, setNotesError] = useState<string | null>(null);
   const clinicContext = useClinicOptional();
 
   useEffect(() => {
-    if (!open || !booking || viewerRole === 'therapist') {
+    if (!open || !booking || viewerRole === 'therapist' || viewerRole === 'doctor') {
       setAudits([]);
       return;
     }
@@ -521,12 +522,10 @@ export function BookingDetailDialog({
   }, [open, booking, viewerRole]);
 
   useEffect(() => {
-    if (!open || !booking || viewerRole !== 'therapist') {
+    if (!open || !booking) {
       setPatientHistory([]);
       return;
     }
-    setNotesDraft(booking.notes ?? '');
-    setNotesError(null);
     let cancelled = false;
     void fetchPatientBookings(booking.patientId, 20)
       .then((rows) => {
@@ -548,37 +547,20 @@ export function BookingDetailDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, booking, viewerRole]);
-
-  async function handleSaveNotes() {
-    if (!booking) return;
-    setNotesSaving(true);
-    setNotesError(null);
-    try {
-      const { booking: updated } = await updateBookingNotes(
-        booking.id,
-        notesDraft.trim() || null,
-      );
-      setNotesDraft(updated.notes ?? '');
-      onNotesSaved?.(updated);
-    } catch (err) {
-      setNotesError(err instanceof Error ? err.message : 'Failed to save notes');
-    } finally {
-      setNotesSaving(false);
-    }
-  }
+  }, [open, booking]);
 
   if (!booking) return null;
 
-  const isTherapistView = viewerRole === 'therapist';
-  const canModify = !isTherapistView && ['SCHEDULED', 'CONFIRMED'].includes(booking.status);
-  const canComplete =
-    !isTherapistView &&
-    onComplete &&
-    ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS'].includes(booking.status);
-  const canAddNotes =
-    isTherapistView &&
-    ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED'].includes(booking.status);
+  const isStaffView = viewerRole === 'therapist' || viewerRole === 'doctor';
+  const isConsultation = booking.bookingType === 'CONSULTATION';
+  const canModify =
+    !isStaffView &&
+    !isConsultation &&
+    ['SCHEDULED', 'CONFIRMED', 'PENDING_CONFIRMATION'].includes(booking.status);
+  const canComplete = !isStaffView && onComplete && canCompleteBooking(booking);
+  const canComment = ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED'].includes(
+    booking.status,
+  );
 
   return (
     <>
@@ -595,14 +577,43 @@ export function BookingDetailDialog({
                 <BookingStatusBadge status={booking.status} />
               </dd>
             </div>
-            <div className="flex items-start justify-between gap-4">
-              <dt className="shrink-0 text-muted-foreground">Therapy</dt>
-              <dd className="text-right font-medium">{booking.therapy.name}</dd>
-            </div>
-            <div className="flex items-start justify-between gap-4">
-              <dt className="shrink-0 text-muted-foreground">Therapist</dt>
-              <dd className="text-right font-medium">{getTherapistName(booking.therapist)}</dd>
-            </div>
+            {isConsultation ? (
+              <>
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="shrink-0 text-muted-foreground">Type</dt>
+                  <dd className="text-right font-medium">Consultation</dd>
+                </div>
+                {booking.doctor && (
+                  <div className="flex items-start justify-between gap-4">
+                    <dt className="shrink-0 text-muted-foreground">Doctor</dt>
+                    <dd className="text-right font-medium">{getDoctorName(booking.doctor)}</dd>
+                  </div>
+                )}
+                {booking.bookingMode && (
+                  <div className="flex items-start justify-between gap-4">
+                    <dt className="shrink-0 text-muted-foreground">Mode</dt>
+                    <dd className="text-right font-medium">
+                      {booking.bookingMode === 'CALL' ? 'Call' : 'Walk-In'}
+                    </dd>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="shrink-0 text-muted-foreground">Therapy</dt>
+                  <dd className="text-right font-medium">{booking.therapy?.name ?? '—'}</dd>
+                </div>
+                {booking.therapist && (
+                  <div className="flex items-start justify-between gap-4">
+                    <dt className="shrink-0 text-muted-foreground">Therapist</dt>
+                    <dd className="text-right font-medium">
+                      {getTherapistName(booking.therapist)}
+                    </dd>
+                  </div>
+                )}
+              </>
+            )}
             <div className="flex items-start justify-between gap-4">
               <dt className="shrink-0 text-muted-foreground">Room</dt>
               <dd className="text-right font-medium">{booking.room.name}</dd>
@@ -610,16 +621,16 @@ export function BookingDetailDialog({
             <div className="flex items-start justify-between gap-4">
               <dt className="shrink-0 text-muted-foreground">Time</dt>
               <dd className="text-right font-medium">
-                {new Date(booking.startTime).toLocaleTimeString('en-GB', {
-                  hour: '2-digit',
+                {new Date(booking.startTime).toLocaleTimeString('en-US', {
+                  hour: 'numeric',
                   minute: '2-digit',
-                  hour12: false,
+                  hour12: true,
                 })}{' '}
                 –{' '}
-                {new Date(booking.endTime).toLocaleTimeString('en-GB', {
-                  hour: '2-digit',
+                {new Date(booking.endTime).toLocaleTimeString('en-US', {
+                  hour: 'numeric',
                   minute: '2-digit',
-                  hour12: false,
+                  hour12: true,
                 })}
               </dd>
             </div>
@@ -627,44 +638,22 @@ export function BookingDetailDialog({
               <dt className="shrink-0 text-muted-foreground">Duration</dt>
               <dd className="text-right font-medium">{booking.durationMinutes} min</dd>
             </div>
-            {!isTherapistView && (
+            {!isStaffView && booking.notes && (
               <div>
-                <dt className="text-muted-foreground">Notes</dt>
-                <dd className="mt-1">{booking.notes || 'No notes recorded.'}</dd>
+                <dt className="text-muted-foreground">Legacy Notes</dt>
+                <dd className="mt-1">{booking.notes}</dd>
               </div>
             )}
-            {isTherapistView && (
-              <div className="border-t pt-3">
-                <dt className="mb-2 font-medium text-slate-700">Session Notes</dt>
-                <dd className="space-y-2">
-                  <Textarea
-                    id="therapist-notes"
-                    value={notesDraft}
-                    onChange={(e) => setNotesDraft(e.target.value)}
-                    placeholder="Add clinical or session notes visible to admin…"
-                    rows={4}
-                    disabled={!canAddNotes || notesSaving}
-                  />
-                  {notesError && <p className="text-sm text-destructive">{notesError}</p>}
-                  {canAddNotes && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={notesSaving || notesDraft === (booking.notes ?? '')}
-                      onClick={() => void handleSaveNotes()}
-                    >
-                      {notesSaving ? 'Saving…' : 'Save Notes'}
-                    </Button>
-                  )}
-                  {!canAddNotes && (
-                    <p className="text-xs text-muted-foreground">
-                      Notes cannot be edited for this appointment status.
-                    </p>
-                  )}
-                </dd>
+            {canComment && (
+              <div>
+                <BookingCommentsThread
+                  bookingId={booking.id}
+                  canComment={canComment}
+                  viewerRole={viewerRole}
+                />
               </div>
             )}
-            {isTherapistView && patientHistory.length > 0 && (
+            {patientHistory.length > 0 && (
               <div className="border-t pt-3">
                 <dt className="mb-2 flex items-center gap-1.5 font-medium text-slate-700">
                   <History className="h-4 w-4" />
@@ -674,15 +663,22 @@ export function BookingDetailDialog({
                   {patientHistory.map((visit) => (
                     <div key={visit.id} className="rounded border bg-slate-50 p-2">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium">{visit.therapy.name}</span>
+                        <span className="font-medium">
+                          {visit.bookingType === 'CONSULTATION'
+                            ? 'Consultation'
+                            : (visit.therapy?.name ?? 'Therapy')}
+                        </span>
                         <BookingStatusBadge status={visit.status} />
                       </div>
                       <p className="text-muted-foreground">{formatDateTime(visit.startTime)}</p>
-                      {visit.notes && (
-                        <p className="mt-1 text-slate-700">
-                          <span className="font-medium">Notes:</span> {visit.notes}
-                        </p>
-                      )}
+                      <p className="text-muted-foreground">
+                        {visit.bookingType === 'CONSULTATION' && visit.doctor
+                          ? getDoctorName(visit.doctor)
+                          : visit.therapist
+                            ? getTherapistName(visit.therapist)
+                            : '—'}
+                        {visit.room ? ` · ${visit.room.name}` : ''}
+                      </p>
                     </div>
                   ))}
                 </dd>
@@ -694,7 +690,7 @@ export function BookingDetailDialog({
                 <dd className="mt-1 text-red-700">{booking.cancellationReason}</dd>
               </div>
             )}
-            {!isTherapistView && (
+            {!isStaffView && (
               <div className="border-t pt-3">
                 <dt className="mb-2 font-medium text-slate-700">Admin Tracking</dt>
                 <dd className="space-y-1 text-xs text-muted-foreground">
@@ -711,7 +707,7 @@ export function BookingDetailDialog({
                 </dd>
               </div>
             )}
-            {!isTherapistView && audits.length > 0 && (
+            {!isStaffView && audits.length > 0 && (
               <div className="border-t pt-3">
                 <dt className="mb-2 font-medium text-slate-700">Change History</dt>
                 <dd className="max-h-40 space-y-2 overflow-y-auto text-xs">
@@ -738,7 +734,7 @@ export function BookingDetailDialog({
 
           <DialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
             <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
-              {!isTherapistView && (
+              {!isStaffView && (
                 <Button variant="outline" className="w-full" asChild>
                   <Link href={`/admin/patients/${booking.patientId}`}>
                     <ExternalLink className="mr-2 h-4 w-4" />
@@ -756,7 +752,7 @@ export function BookingDetailDialog({
               </Button>
             </div>
 
-            {canModify && (
+            {canModify && onEdit && onReschedule && onCancel && (
               <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3">
                 <Button variant="outline" className="w-full" onClick={onEdit}>
                   Edit
@@ -769,7 +765,15 @@ export function BookingDetailDialog({
                 </Button>
               </div>
             )}
-            {!isTherapistView && booking.status === 'CANCELLED' && onRestore && (
+            {!isStaffView &&
+              isConsultation &&
+              onCancel &&
+              ['SCHEDULED', 'CONFIRMED', 'PENDING_CONFIRMATION'].includes(booking.status) && (
+                <Button variant="destructive" className="w-full" onClick={onCancel}>
+                  Cancel
+                </Button>
+              )}
+            {!isStaffView && booking.status === 'CANCELLED' && onRestore && (
               <Button variant="outline" className="w-full" onClick={onRestore}>
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Restore Appointment

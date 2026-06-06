@@ -9,17 +9,21 @@ import { ProgressDialog } from '@/components/shared/progress-dialog';
 import { useProgressAction } from '@/hooks/use-progress-action';
 import { createLeaveRequest } from '@/lib/leave-api';
 import { getFriendlyErrorMessage } from '@/lib/error-utils';
+import { combineDateAndTime, endOfDay, parseDateInput, startOfDay } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
 
 interface LeaveRequestFormProps {
-  onSuccess?: () => void;
+  onSuccess?: (result: { affectedCount: number }) => void;
 }
 
 export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
   const { progress, run } = useProgressAction();
   const [startDate, setStartDate] = useState('');
+  const [startTime, setStartTime] = useState('09:00');
   const [endDate, setEndDate] = useState('');
+  const [endTime, setEndTime] = useState('17:00');
+  const [isFullDay, setIsFullDay] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -27,14 +31,34 @@ export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
     e.preventDefault();
     setError(null);
     try {
+      const startDateTime = isFullDay
+        ? startOfDay(parseDateInput(startDate)).toISOString()
+        : combineDateAndTime(parseDateInput(startDate), startTime).toISOString();
+      const endDateTime = isFullDay
+        ? endOfDay(parseDateInput(endDate || startDate)).toISOString()
+        : combineDateAndTime(parseDateInput(endDate), endTime).toISOString();
+
+      if (new Date(endDateTime) < new Date(startDateTime)) {
+        setError('End date/time must be on or after start date/time');
+        return;
+      }
+
       await run(
         'Submitting leave request…',
         async () => {
-          await createLeaveRequest({ startDate, endDate, reason: reason.trim() });
+          const result = await createLeaveRequest({
+            startDateTime,
+            endDateTime,
+            isFullDay,
+            reason: reason.trim(),
+          });
           setStartDate('');
+          setStartTime('09:00');
           setEndDate('');
+          setEndTime('17:00');
+          setIsFullDay(false);
           setReason('');
-          onSuccess?.();
+          onSuccess?.({ affectedCount: result.affectedBookings?.length ?? 0 });
         },
         'Sending your request to the clinic admin',
       );
@@ -57,28 +81,62 @@ export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
         </CardHeader>
         <CardContent>
           <form onSubmit={(e) => void handleSubmit(e)} className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="startDate">Start date *</Label>
-              <Input
-                id="startDate"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                required
-                disabled={progress.open}
-              />
+            <div className="space-y-2 sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={isFullDay}
+                  onChange={(e) => setIsFullDay(e.target.checked)}
+                  disabled={progress.open}
+                />
+                Full day leave
+              </label>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="endDate">End date *</Label>
-              <Input
-                id="endDate"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                min={startDate}
-                required
-                disabled={progress.open}
-              />
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Start date{isFullDay ? '' : ' & time'} *</Label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    if (isFullDay && !endDate) setEndDate(e.target.value);
+                  }}
+                  required
+                  disabled={progress.open}
+                />
+                {!isFullDay && (
+                  <Input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    required
+                    disabled={progress.open}
+                  />
+                )}
+              </div>
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>End date{isFullDay ? '' : ' & time'} *</Label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Input
+                  type="date"
+                  value={isFullDay ? endDate || startDate : endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  min={startDate}
+                  required
+                  disabled={progress.open}
+                />
+                {!isFullDay && (
+                  <Input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    required
+                    disabled={progress.open}
+                  />
+                )}
+              </div>
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="reason">Reason *</Label>

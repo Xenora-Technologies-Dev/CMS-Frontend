@@ -29,6 +29,8 @@ export default function LoginPage() {
         router.push('/admin');
       } else if (result.user.role === 'THERAPIST') {
         router.push('/therapist');
+      } else if (result.user.role === 'DOCTOR') {
+        router.push('/doctor');
       } else {
         setError('Unsupported account role');
       }
@@ -60,7 +62,7 @@ export default function LoginPage() {
             <div className="px-8 py-8">
               <div className="mb-6 text-center">
                 <h2 className="text-lg font-semibold text-slate-900">Welcome back</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Sign in as admin or therapist</p>
+                <p className="mt-1 text-sm text-muted-foreground">Sign in as admin, therapist, or doctor</p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-5">

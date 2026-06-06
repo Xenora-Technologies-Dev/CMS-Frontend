@@ -1,16 +1,20 @@
 import { apiRequest, apiRequestPaginated } from './api';
 import type { PaginatedResponse, RoomDetail } from './types';
 
+import type { RoomType } from './types';
+
 export interface ListRoomsParams {
   page?: number;
   limit?: number;
   search?: string;
   isActive?: boolean;
+  roomType?: RoomType;
 }
 
 export interface CreateRoomPayload {
   name: string;
   code?: string;
+  roomType?: RoomType;
   capacity?: number;
   floor?: string;
   equipment?: string;
@@ -25,6 +29,7 @@ function buildQuery(params: ListRoomsParams): string {
   if (params.limit) qs.set('limit', String(params.limit));
   if (params.search?.trim()) qs.set('search', params.search.trim());
   if (params.isActive !== undefined) qs.set('isActive', String(params.isActive));
+  if (params.roomType) qs.set('roomType', params.roomType);
   return qs.toString();
 }
 

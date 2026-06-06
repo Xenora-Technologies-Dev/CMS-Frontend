@@ -35,6 +35,14 @@ function RoleBadge({ role }: { role: UserRole }) {
       </Badge>
     );
   }
+  if (role === 'DOCTOR') {
+    return (
+      <Badge variant="secondary" className="gap-1 bg-violet-100 text-violet-800">
+        <UserCog className="h-3 w-3" />
+        Doctor
+      </Badge>
+    );
+  }
   return (
     <Badge variant="secondary" className="gap-1">
       <UserCog className="h-3 w-3" />
@@ -133,6 +141,7 @@ export function UserList() {
             <SelectItem value="ALL">All roles</SelectItem>
             <SelectItem value="ADMIN">Admin only</SelectItem>
             <SelectItem value="THERAPIST">Therapist only</SelectItem>
+            <SelectItem value="DOCTOR">Doctor only</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
@@ -197,7 +206,7 @@ export function UserList() {
                               year: 'numeric',
                               hour: '2-digit',
                               minute: '2-digit',
-                              hour12: false,
+                              hour12: true,
                             })
                           : 'Never'}
                       </td>

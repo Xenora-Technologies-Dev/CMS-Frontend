@@ -8,8 +8,15 @@ import {
   CALENDAR_SLOT_MINUTES,
 } from '@/components/booking/booking-constants';
 import { BookingCard } from '@/components/booking/booking-card';
-import type { Booking, Room } from '@/lib/types';
-import { cn, generateTimeSlots } from '@/lib/utils';
+import type { Booking, PublicHoliday, Room } from '@/lib/types';
+import {
+  cn,
+  combineDateAndTime,
+  formatTimeInputValue,
+  generateTimeSlots,
+  getBookingStaffColor,
+  hexToRgba,
+} from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Plus } from 'lucide-react';
 import { useMemo } from 'react';
@@ -18,12 +25,35 @@ interface BookingTimelineProps {
   rooms: Room[];
   bookings: Booking[];
   selectedDate: Date;
+  holidays?: PublicHoliday[];
   onSelectBooking: (booking: Booking) => void;
   onEmptySlotClick?: (roomId: string, time: string) => void;
   showBookingActions?: boolean;
   onEditBooking?: (booking: Booking) => void;
   onPostponeBooking?: (booking: Booking) => void;
   onCancelBooking?: (booking: Booking) => void;
+}
+
+function slotOverlapsBooking(slot: string, booking: Booking, selectedDate: Date): boolean {
+  const slotStart = combineDateAndTime(selectedDate, slot);
+  const slotEnd = new Date(slotStart);
+  slotEnd.setMinutes(slotEnd.getMinutes() + CALENDAR_SLOT_MINUTES);
+  const bookingStart = new Date(booking.startTime);
+  const bookingEnd = new Date(booking.endTime);
+  return bookingStart < slotEnd && bookingEnd > slotStart;
+}
+
+function getSlotFillColor(
+  roomId: string,
+  slot: string,
+  bookings: Booking[],
+  selectedDate: Date,
+): string | undefined {
+  const covering = bookings.find(
+    (b) => b.roomId === roomId && slotOverlapsBooking(slot, b, selectedDate),
+  );
+  if (!covering) return undefined;
+  return hexToRgba(getBookingStaffColor(covering), 0.18);
 }
 
 function getBookingPosition(booking: Booking) {
@@ -45,6 +75,7 @@ export function BookingTimeline({
   rooms,
   bookings,
   selectedDate,
+  holidays = [],
   onSelectBooking,
   onEmptySlotClick,
   showBookingActions = false,
@@ -87,8 +118,26 @@ export function BookingTimeline({
   const isToday =
     new Date().toDateString() === selectedDate.toDateString();
 
+  const dayHolidays = useMemo(() => {
+    const dayStart = new Date(selectedDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(selectedDate);
+    dayEnd.setHours(23, 59, 59, 999);
+    return holidays.filter((h) => {
+      const start = new Date(h.startDateTime);
+      const end = new Date(h.endDateTime);
+      return start <= dayEnd && end >= dayStart;
+    });
+  }, [holidays, selectedDate]);
+
   return (
     <div className="rounded-lg border bg-white shadow-sm">
+      {dayHolidays.length > 0 && (
+        <div className="border-b bg-amber-50 px-4 py-2 text-xs text-amber-900">
+          <span className="font-semibold">Public holiday{dayHolidays.length > 1 ? 's' : ''}: </span>
+          {dayHolidays.map((h) => h.name).join(', ')}
+        </div>
+      )}
       <div className="hidden md:block">
         <ScrollArea className="w-full">
           <div className="inline-flex min-w-full">
@@ -110,7 +159,7 @@ export function BookingTimeline({
                   >
                     {index % 4 === 0 && (
                       <span className="absolute -top-2 left-0.5 bg-slate-50 px-0.5 text-[10px] font-medium text-muted-foreground">
-                        {slot}
+                        {formatTimeInputValue(slot)}
                       </span>
                     )}
                   </div>
@@ -135,7 +184,9 @@ export function BookingTimeline({
                 </div>
 
                 <div className="relative bg-slate-50/20" style={{ height: timelineHeight }}>
-                  {timeSlots.map((slot, index) => (
+                  {timeSlots.map((slot, index) => {
+                    const fillColor = getSlotFillColor(room.id, slot, bookings, selectedDate);
+                    return (
                     <button
                       key={`${room.id}-${slot}`}
                       type="button"
@@ -148,15 +199,17 @@ export function BookingTimeline({
                       style={{
                         top: index * CALENDAR_SLOT_HEIGHT,
                         height: CALENDAR_SLOT_HEIGHT,
+                        backgroundColor: fillColor,
                       }}
                       onClick={() => onEmptySlotClick?.(room.id, slot)}
-                      aria-label={`Book ${room.name} at ${slot}`}
+                      aria-label={`Book ${room.name} at ${formatTimeInputValue(slot)}`}
                     >
                       {onEmptySlotClick && index % 2 === 0 && (
                         <Plus className="mx-auto hidden h-3 w-3 text-primary/40 group-hover:block" />
                       )}
                     </button>
-                  ))}
+                    );
+                  })}
 
                   {isToday && nowIndicatorTop !== null && (
                     <div

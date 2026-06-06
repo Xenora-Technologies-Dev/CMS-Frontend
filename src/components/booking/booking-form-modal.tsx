@@ -50,12 +50,16 @@ import {
   isScheduleConstraintIssue,
   validateBookingSlot,
   type SlotValidationInput,
+  type ApprovedLeaveBlock,
 } from '@/lib/booking-validation';
+import { fetchApprovedLeaves } from '@/lib/leave-api';
 import { useToast } from '@/components/providers/toast-provider';
 import { getFriendlyErrorMessage } from '@/lib/error-utils';
 import { ProgressDialog } from '@/components/shared/progress-dialog';
 import { useProgressAction } from '@/hooks/use-progress-action';
-import type { Booking, Patient, Room, Therapist, Therapy } from '@/lib/types';
+import { PackageSelectionPanel, type PackageChoice } from '@/components/booking/package-selection-panel';
+import { getActiveTreatmentPlan } from '@/lib/treatment-plan-api';
+import type { Booking, Patient, Room, Therapist, Therapy, TreatmentPlan } from '@/lib/types';
 import {
   combineDateAndTime,
   formatDateInput,
@@ -128,8 +132,12 @@ export function BookingFormModal({
     import('@/lib/types').TherapistAvailability[]
   >([]);
   const [previewBookings, setPreviewBookings] = useState<Booking[]>(dayBookings);
+  const [approvedLeaves, setApprovedLeaves] = useState<ApprovedLeaveBlock[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [quickAddPatientOpen, setQuickAddPatientOpen] = useState(false);
+  const [activeTreatmentPlan, setActiveTreatmentPlan] = useState<TreatmentPlan | null>(null);
+  const [packageLoading, setPackageLoading] = useState(false);
+  const [packageChoice, setPackageChoice] = useState<PackageChoice>(null);
 
   const form = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
@@ -147,6 +155,7 @@ export function BookingFormModal({
 
   const watched = form.watch();
   const selectedTherapy = therapies.find((t) => t.id === watched.therapyId);
+  const isPackageTherapy = Boolean(selectedTherapy?.isPackageBased);
   const selectedTherapist = therapists.find((t) => t.id === watched.therapistId);
   const selectedRoom = rooms.find((r) => r.id === watched.roomId);
 
@@ -165,6 +174,7 @@ export function BookingFormModal({
       therapist: selectedTherapist,
       availability,
       dayBookings: previewBookings,
+      approvedLeaves,
       excludeBookingId: mode === 'edit' && booking ? booking.id : undefined,
     }),
     [
@@ -176,6 +186,7 @@ export function BookingFormModal({
       selectedTherapist,
       availability,
       previewBookings,
+      approvedLeaves,
       mode,
       booking,
     ],
@@ -194,6 +205,7 @@ export function BookingFormModal({
         therapist: selectedTherapist,
         availability,
         dayBookings: previewBookings,
+        approvedLeaves,
         excludeBookingId: mode === 'edit' && booking ? booking.id : undefined,
       }),
     [
@@ -202,6 +214,7 @@ export function BookingFormModal({
       selectedTherapist,
       availability,
       previewBookings,
+      approvedLeaves,
       mode,
       booking,
     ],
@@ -272,15 +285,19 @@ export function BookingFormModal({
     form.formState.isValid &&
     !hasBlockingIssues &&
     Boolean(selectedTherapy?.durationMinutes) &&
-    Boolean(watched.roomId || mode === 'edit');
+    Boolean(watched.roomId || mode === 'edit') &&
+    (!isPackageTherapy ||
+      mode === 'edit' ||
+      packageChoice === 'continue' ||
+      packageChoice === 'new');
 
   const resetForm = useCallback(() => {
     const baseDate = prefill?.date ?? defaultDate;
     if (mode === 'edit' && booking) {
       form.reset({
         patientId: booking.patientId,
-        therapistId: booking.therapistId,
-        therapyId: booking.therapyId,
+        therapistId: booking.therapistId ?? undefined,
+        therapyId: booking.therapyId ?? undefined,
         roomId: booking.roomId,
         date: formatDateInput(new Date(booking.startTime)),
         startTime: toTimeInputValue(booking.startTime),
@@ -304,7 +321,11 @@ export function BookingFormModal({
     setOverrideScheduleConstraints(false);
     setAvailability([]);
     setPreviewBookings(dayBookings);
+    setApprovedLeaves([]);
     setSlotsLoading(false);
+    setActiveTreatmentPlan(null);
+    setPackageChoice(null);
+    setPackageLoading(false);
   }, [mode, booking, prefill, defaultDate, dayBookings, form]);
 
   const loadSlotSchedule = useCallback(
@@ -318,12 +339,20 @@ export function BookingFormModal({
         const end = new Date(date);
         end.setHours(23, 59, 59, 999);
 
-        const [slots, bookings] = await Promise.all([
+        const [slots, bookings, leaveResult] = await Promise.all([
           fetchTherapistAvailability(watched.therapistId),
           fetchBookingsForDateRange(start, end, 250),
+          fetchApprovedLeaves(watched.therapistId, start.toISOString(), end.toISOString()),
         ]);
         setAvailability(slots);
         setPreviewBookings(bookings);
+        setApprovedLeaves(
+          leaveResult.leaves.map((leave) => ({
+            startDateTime: leave.startDateTime,
+            endDateTime: leave.endDateTime,
+            isFullDay: leave.isFullDay,
+          })),
+        );
         return bookings;
       } catch {
         return [];
@@ -371,9 +400,55 @@ export function BookingFormModal({
   }, [watched.patientId, mode, booking]);
 
   useEffect(() => {
+    if (!open || mode !== 'create' || !watched.patientId || !watched.therapyId || !isPackageTherapy) {
+      setActiveTreatmentPlan(null);
+      setPackageChoice(null);
+      return;
+    }
+    let cancelled = false;
+    setPackageLoading(true);
+    void getActiveTreatmentPlan(watched.patientId, watched.therapyId)
+      .then(({ treatmentPlan }) => {
+        if (cancelled) return;
+        setActiveTreatmentPlan(treatmentPlan);
+        if (treatmentPlan) {
+          setPackageChoice(null);
+        } else {
+          setPackageChoice('new');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setActiveTreatmentPlan(null);
+          setPackageChoice('new');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPackageLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, mode, watched.patientId, watched.therapyId, isPackageTherapy]);
+
+  useEffect(() => {
+    if (!open || mode === 'edit') return;
+    setActiveTreatmentPlan(null);
+    setPackageChoice(null);
+  }, [watched.therapyId, open, mode]);
+
+  useEffect(() => {
     if (!open || !scheduleReady) return;
     void loadSlotSchedule();
   }, [open, scheduleReady, watched.therapistId, watched.date, loadSlotSchedule]);
+
+  useSocketEvent(
+    SocketEvents.LEAVE_UPDATED,
+    () => {
+      if (open && scheduleReady) void loadSlotSchedule();
+    },
+    open && scheduleReady,
+  );
 
   useSocketEvent(
     SocketEvents.BOOKING_UPDATED,
@@ -453,6 +528,10 @@ export function BookingFormModal({
         startTime: startIso,
         notes: values.notes?.trim() || undefined,
         overrideScheduleConstraints,
+        ...(packageChoice === 'continue' && activeTreatmentPlan
+          ? { treatmentPlanId: activeTreatmentPlan.id }
+          : {}),
+        ...(packageChoice === 'new' ? { createNewPackage: true } : {}),
       });
       return created;
     }
@@ -721,6 +800,15 @@ export function BookingFormModal({
                   )}
                 />
               </div>
+
+              {mode === 'create' && watched.patientId && isPackageTherapy && (
+                <PackageSelectionPanel
+                  plan={activeTreatmentPlan}
+                  loading={packageLoading}
+                  choice={packageChoice}
+                  onChoiceChange={setPackageChoice}
+                />
+              )}
 
               {scheduleReady && (
                 <FormField

@@ -1,5 +1,5 @@
-import { AdminLeaveManagement } from '@/components/leave/admin-leave-management';
+import { redirect } from 'next/navigation';
 
-export default function LeavesPage() {
-  return <AdminLeaveManagement />;
+export default function AdminLeavesIndexPage() {
+  redirect('/admin/leaves/management');
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import type { Room, Therapist, Therapy } from '@/lib/types';
-import { formatTime, getPatientName, getTherapistName } from '@/lib/utils';
+import { formatTime, formatTimeInputValue, getPatientName, getTherapistName } from '@/lib/utils';
 import { BookingStatusBadge } from '@/components/booking/booking-status-badge';
 import { Separator } from '@/components/ui/separator';
 import { Calendar, Clock, DoorOpen, Stethoscope, User } from 'lucide-react';
@@ -41,7 +41,7 @@ export function BookingSummary({
     {
       icon: Clock,
       label: 'Time',
-      value: `${startTime} – ${formatTime(endTime)}`,
+      value: `${formatTimeInputValue(startTime)} – ${formatTime(endTime)}`,
     },
   ];
 

@@ -36,7 +36,8 @@ export function UpcomingAppointments({
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-slate-900">{getPatientName(booking.patient)}</p>
                     <p className="truncate text-sm text-muted-foreground">
-                      {booking.therapy.name} · {getTherapistName(booking.therapist)}
+                      {booking.therapy?.name ?? 'Appointment'} ·{' '}
+                      {booking.therapist ? getTherapistName(booking.therapist) : '—'}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {formatTime(booking.startTime)} · {booking.room.name}

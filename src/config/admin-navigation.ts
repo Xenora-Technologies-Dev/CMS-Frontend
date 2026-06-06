@@ -4,12 +4,14 @@ import {
   Building2,
   CalendarDays,
   DoorOpen,
+  FileBarChart,
   HeartPulse,
   LayoutDashboard,
   Palmtree,
   Shield,
   Stethoscope,
   User,
+  UserRound,
   Users,
   UsersRound,
 } from 'lucide-react';
@@ -44,9 +46,10 @@ export const ADMIN_NAV_MAIN: AdminNavItem[] = [
     title: 'Appointments',
     icon: CalendarDays,
     items: [
-      { title: 'Booking Calendar', href: '/admin/appointments/calendar' },
+      { title: 'Therapy Booking', href: '/admin/appointments/calendar' },
+      { title: 'Consultation Booking', href: '/admin/appointments/consultation' },
       { title: 'Appointment List', href: '/admin/appointments/list' },
-      { title: "Today's Appointments", href: '/admin/appointments/today' },
+      { title: 'Recent Bookings', href: '/admin/appointments/recent' },
     ],
   },
   {
@@ -65,6 +68,15 @@ export const ADMIN_NAV_MAIN: AdminNavItem[] = [
     items: [
       { title: 'Therapist List', href: '/admin/therapists' },
       { title: 'Add Therapist', href: '/admin/therapists/new' },
+    ],
+  },
+  {
+    type: 'group',
+    title: 'Doctors',
+    icon: UserRound,
+    items: [
+      { title: 'Doctor List', href: '/admin/doctors' },
+      { title: 'Add Doctor', href: '/admin/doctors/new' },
     ],
   },
   {
@@ -89,10 +101,23 @@ export const ADMIN_NAV_MAIN: AdminNavItem[] = [
     icon: Shield,
   },
   {
-    type: 'link',
+    type: 'group',
     title: 'Leaves',
-    href: '/admin/leaves',
     icon: Palmtree,
+    items: [
+      { title: 'Leave Management', href: '/admin/leaves/management' },
+      { title: 'Leave History', href: '/admin/leaves/history' },
+      { title: 'Public Holidays', href: '/admin/leaves/holidays' },
+    ],
+  },
+  {
+    type: 'group',
+    title: 'Reports',
+    icon: FileBarChart,
+    items: [
+      { title: 'Therapy Report', href: '/admin/reports/therapy' },
+      { title: 'Consultation Report', href: '/admin/reports/consultation' },
+    ],
   },
   {
     type: 'link',
@@ -133,16 +158,28 @@ export interface AdminPageMeta {
 const PAGE_META: Record<string, AdminPageMeta> = {
   '/admin': { title: 'Dashboard', description: 'Overview of clinic operations and key metrics.' },
   '/admin/appointments/calendar': {
-    title: 'Booking Calendar',
-    description: 'Schedule and manage therapy appointments across rooms.',
+    title: 'Therapy Booking',
+    description: 'Schedule and manage therapy appointments across therapy rooms.',
+  },
+  '/admin/appointments/consultation': {
+    title: 'Consultation Booking',
+    description: 'Schedule and manage doctor consultations across consultation rooms.',
   },
   '/admin/appointments/list': {
     title: 'Appointment List',
     description: 'View, filter, and manage all clinic appointments.',
   },
-  '/admin/appointments/today': {
-    title: "Today's Appointments",
-    description: 'View and manage all appointments scheduled for today.',
+  '/admin/appointments/recent': {
+    title: 'Recent Bookings',
+    description: 'Bookings created in the last 48 hours with audit tracking.',
+  },
+  '/admin/reports/therapy': {
+    title: 'Therapy Report',
+    description: 'Therapy booking statistics and export.',
+  },
+  '/admin/reports/consultation': {
+    title: 'Consultation Report',
+    description: 'Consultation booking log and export.',
   },
   '/admin/patients': { title: 'Patient List', description: 'Search and manage registered patients.' },
   '/admin/patients/new': { title: 'Add Patient', description: 'Register a new patient in the clinic.' },
@@ -155,7 +192,23 @@ const PAGE_META: Record<string, AdminPageMeta> = {
   '/admin/therapies/new': { title: 'Add Therapy', description: 'Create a new therapy offering.' },
   '/admin/rooms': { title: 'Rooms', description: 'Manage treatment rooms and availability.' },
   '/admin/insurance': { title: 'Insurance', description: 'Insurance providers and patient coverage.' },
-  '/admin/leaves': { title: 'Leaves', description: 'Therapist leave requests and approvals.' },
+  '/admin/leaves/management': {
+    title: 'Leave Management',
+    description: 'Approve requests, enter leave, and resolve booking conflicts.',
+  },
+  '/admin/leaves/history': {
+    title: 'Leave History',
+    description: 'Upcoming, today’s, and past therapist leave records.',
+  },
+  '/admin/leaves/holidays': {
+    title: 'Public Holidays',
+    description: 'Manage clinic-wide public holidays shown on calendars.',
+  },
+  '/admin/doctors': {
+    title: 'Doctor List',
+    description: 'Manage doctors and consultation schedules.',
+  },
+  '/admin/doctors/new': { title: 'Add Doctor', description: 'Onboard a new doctor to the clinic.' },
   '/admin/users': { title: 'Users', description: 'Clinic staff accounts and roles.' },
   '/admin/notifications': { title: 'Notifications', description: 'System alerts and activity updates.' },
   '/admin/settings': {
@@ -193,6 +246,12 @@ export function getAdminPageMeta(pathname: string): AdminPageMeta {
   }
   if (pathname.startsWith('/admin/therapists/') && pathname !== '/admin/therapists/new') {
     return { title: 'Therapist Profile', description: 'Contact, hours, and availability.' };
+  }
+  if (pathname.startsWith('/admin/doctors/') && pathname.endsWith('/edit')) {
+    return { title: 'Edit Doctor', description: 'Update doctor profile and hours.' };
+  }
+  if (pathname.startsWith('/admin/doctors/') && pathname !== '/admin/doctors/new') {
+    return { title: 'Doctor Profile', description: 'Contact, hours, and schedule.' };
   }
   if (pathname.includes('/therapies/') && pathname.endsWith('/edit')) {
     return { title: 'Edit Therapy', description: 'Update therapy configuration.' };

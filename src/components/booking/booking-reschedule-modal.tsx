@@ -39,12 +39,14 @@ import {
   formatDateInput,
   formatDuration,
   formatTime,
+  formatTimeInputValue,
   generateTimeSlots,
   getPatientName,
   getTherapistName,
   parseDateInput,
   toTimeInputValue,
 } from '@/lib/utils';
+import { useToast } from '@/components/providers/toast-provider';
 import { useEffect, useMemo, useState } from 'react';
 
 interface BookingRescheduleModalProps {
@@ -64,6 +66,7 @@ export function BookingRescheduleModal({
   rooms,
   onSuccess,
 }: BookingRescheduleModalProps) {
+  const { showBookingAction } = useToast();
   const timeSlots = generateTimeSlots(8, 18, 15);
   const [dateValue, setDateValue] = useState('');
   const [therapistId, setTherapistId] = useState('');
@@ -78,7 +81,7 @@ export function BookingRescheduleModal({
   const [loading, setLoading] = useState(false);
 
   const selectedTherapist = therapists.find((t) => t.id === therapistId);
-  const durationMinutes = booking?.durationMinutes ?? booking?.therapy.durationMinutes ?? 0;
+  const durationMinutes = booking?.durationMinutes ?? booking?.therapy?.durationMinutes ?? 0;
 
   const endTime = useMemo(() => {
     if (!dateValue || !time || !durationMinutes) return null;
@@ -117,7 +120,7 @@ export function BookingRescheduleModal({
     if (!open || !booking) return;
     const start = new Date(booking.startTime);
     setDateValue(formatDateInput(start));
-    setTherapistId(booking.therapistId);
+    setTherapistId(booking.therapistId ?? '');
     setRoomId(booking.roomId);
     setTime(toTimeInputValue(booking.startTime));
     setError(null);
@@ -172,13 +175,19 @@ export function BookingRescheduleModal({
     setError(null);
     setConflictDetails(null);
     try {
-      await rescheduleBooking(booking.id, {
+      const previousStartTime = booking.startTime;
+      const { booking: updated } = await rescheduleBooking(booking.id, {
         startTime: combineDateAndTime(parseDateInput(dateValue), time).toISOString(),
         therapistId,
         roomId,
       });
       onOpenChange(false);
-      onSuccess(combineDateAndTime(parseDateInput(dateValue), time).toISOString());
+      showBookingAction({
+        action: 'postpone',
+        booking: updated,
+        previousStartTime,
+      });
+      onSuccess(updated.startTime);
     } catch (err) {
       if (err instanceof ApiRequestError) {
         setConflictDetails(parseConflictDetails(err));
@@ -209,7 +218,7 @@ export function BookingRescheduleModal({
               </div>
               <div>
                 <dt className="text-xs uppercase">Therapy</dt>
-                <dd className="font-medium text-slate-800">{booking.therapy.name}</dd>
+                <dd className="font-medium text-slate-800">{booking.therapy?.name ?? '—'}</dd>
               </div>
               <div>
                 <dt className="text-xs uppercase">Start</dt>
@@ -221,7 +230,9 @@ export function BookingRescheduleModal({
               </div>
               <div>
                 <dt className="text-xs uppercase">Therapist</dt>
-                <dd className="font-medium text-slate-800">{getTherapistName(booking.therapist)}</dd>
+                <dd className="font-medium text-slate-800">
+                  {booking.therapist ? getTherapistName(booking.therapist) : '—'}
+                </dd>
               </div>
               <div>
                 <dt className="text-xs uppercase">Room</dt>
@@ -251,7 +262,7 @@ export function BookingRescheduleModal({
               <SelectContent>
                 {timeSlots.map((slot) => (
                   <SelectItem key={slot} value={slot}>
-                    {slot}
+                    {formatTimeInputValue(slot)}
                   </SelectItem>
                 ))}
               </SelectContent>

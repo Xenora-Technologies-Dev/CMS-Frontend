@@ -27,12 +27,16 @@ export function TodaySchedule({ bookings, calendarHref = '/admin/appointments/ca
               <div
                 key={booking.id}
                 className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
-                style={{ borderLeftWidth: 4, borderLeftColor: getTherapistColor(booking.therapist.colorCode) }}
+                style={{
+                  borderLeftWidth: 4,
+                  borderLeftColor: getTherapistColor(booking.therapist?.colorCode),
+                }}
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-slate-900">{getPatientName(booking.patient)}</p>
                   <p className="truncate text-sm text-muted-foreground">
-                    {booking.therapy.name} · {getTherapistName(booking.therapist)}
+                    {booking.therapy?.name ?? 'Appointment'} ·{' '}
+                    {booking.therapist ? getTherapistName(booking.therapist) : '—'}
                   </p>
                   <p className="text-xs text-muted-foreground">{booking.room.name}</p>
                 </div>

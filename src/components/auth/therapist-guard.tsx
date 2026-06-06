@@ -16,7 +16,9 @@ export function TherapistGuard({ children }: { children: React.ReactNode }) {
       return;
     }
     if (user && user.role !== 'THERAPIST') {
-      router.replace(user.role === 'ADMIN' ? '/admin' : '/login');
+      router.replace(
+        user.role === 'ADMIN' ? '/admin' : user.role === 'DOCTOR' ? '/doctor' : '/login',
+      );
     }
   }, [user, loading, router]);
 

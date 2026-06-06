@@ -8,7 +8,9 @@ import {
 import { listRooms } from '@/lib/room-api';
 import { listTherapists } from '@/lib/therapist-api';
 import { listTherapies } from '@/lib/therapy-api';
-import type { Booking, Patient, Room, Therapist, Therapy } from '@/lib/types';
+import { listPublicHolidays } from '@/lib/holiday-api';
+import type { Booking, PublicHoliday, Room, Therapist, Therapy } from '@/lib/types';
+import { endOfDay, startOfDay } from '@/lib/utils';
 import { cn, getTherapistColor, getTherapistName } from '@/lib/utils';
 import { BookingCardList } from '@/components/booking/booking-card';
 import { CalendarFilters } from '@/components/booking/calendar-filters';
@@ -22,6 +24,7 @@ import { BookingTimeline } from '@/components/booking/booking-timeline';
 import { Button } from '@/components/ui/button';
 import { Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useToast } from '@/components/providers/toast-provider';
 import { useSocketEvent } from '@/components/providers/socket-provider';
 import { useClinicOptional } from '@/components/providers/clinic-provider';
 import { formatClinicLocation, getClinicDisplayName } from '@/lib/clinic-api';
@@ -32,9 +35,17 @@ const RESOURCE_LIMIT = 100;
 interface BookingCalendarProps {
   lockedTherapistId?: string;
   hideTitle?: boolean;
+  pageTitle?: string;
+  pageDescription?: string;
 }
 
-export function BookingCalendar({ lockedTherapistId, hideTitle }: BookingCalendarProps = {}) {
+export function BookingCalendar({
+  lockedTherapistId,
+  hideTitle,
+  pageTitle = 'Therapy Booking',
+  pageDescription = 'Daily view · 15-minute slots · therapy rooms · therapist color coding',
+}: BookingCalendarProps = {}) {
+  const { showBookingAction } = useToast();
   const clinicContext = useClinicOptional();
   const clinic = clinicContext?.clinic;
   const clinicName = getClinicDisplayName(clinic);
@@ -44,6 +55,7 @@ export function BookingCalendar({ lockedTherapistId, hideTitle }: BookingCalenda
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [therapies, setTherapies] = useState<Therapy[]>([]);
+  const [holidays, setHolidays] = useState<PublicHoliday[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,7 +87,9 @@ export function BookingCalendar({ lockedTherapistId, hideTitle }: BookingCalenda
   const filteredBookings = useMemo(() => {
     let result = activeBookings;
     if (selectedTherapistIds.length > 0) {
-      result = result.filter((b) => selectedTherapistIds.includes(b.therapistId));
+      result = result.filter(
+        (b) => b.therapistId && selectedTherapistIds.includes(b.therapistId),
+      );
     }
     if (selectedRoomIds.length > 0) {
       result = result.filter((b) => selectedRoomIds.includes(b.roomId));
@@ -92,12 +106,18 @@ export function BookingCalendar({ lockedTherapistId, hideTitle }: BookingCalenda
     setLoading(true);
     setError(null);
     try {
-      const [dayBookings, therapistResult, roomResult, therapyResult] = await Promise.all([
-        fetchBookingsForDate(selectedDate, RESOURCE_LIMIT),
-        listTherapists({ limit: RESOURCE_LIMIT, isActive: true }),
-        listRooms({ limit: RESOURCE_LIMIT, isActive: true }),
-        listTherapies({ limit: RESOURCE_LIMIT, isActive: true }),
-      ]);
+      const [dayBookings, therapistResult, roomResult, therapyResult, holidayResult] =
+        await Promise.all([
+          fetchBookingsForDate(selectedDate, RESOURCE_LIMIT, { bookingType: 'THERAPY' }),
+          listTherapists({ limit: RESOURCE_LIMIT, isActive: true }),
+          listRooms({ limit: RESOURCE_LIMIT, isActive: true, roomType: 'THERAPY' }),
+          listTherapies({ limit: RESOURCE_LIMIT, isActive: true }),
+          listPublicHolidays({
+            limit: RESOURCE_LIMIT,
+            dateFrom: startOfDay(selectedDate).toISOString(),
+            dateTo: endOfDay(selectedDate).toISOString(),
+          }),
+        ]);
       setBookings(dayBookings);
       setTherapists(
         lockedTherapistId
@@ -106,6 +126,7 @@ export function BookingCalendar({ lockedTherapistId, hideTitle }: BookingCalenda
       );
       setRooms(roomResult.data);
       setTherapies(therapyResult.data);
+      setHolidays(holidayResult.data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load calendar data');
     } finally {
@@ -201,10 +222,17 @@ export function BookingCalendar({ lockedTherapistId, hideTitle }: BookingCalenda
 
   async function handleCancel(reason: string) {
     if (!selectedBooking) return;
-    await cancelBooking(selectedBooking.id, {
+    const previous = selectedBooking;
+    const { booking: updated } = await cancelBooking(previous.id, {
       cancellationReason: reason || undefined,
     });
+    setCancelOpen(false);
     setDetailOpen(false);
+    showBookingAction({
+      action: 'cancel',
+      booking: updated,
+      cancellationReason: reason || undefined,
+    });
     await loadData();
   }
 
@@ -246,10 +274,8 @@ export function BookingCalendar({ lockedTherapistId, hideTitle }: BookingCalenda
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         {!hideTitle && (
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Booking Calendar</h1>
-            <p className="text-sm text-muted-foreground">
-              Daily view · 15-minute slots · rooms as columns · therapist color coding
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight">{pageTitle}</h1>
+            <p className="text-sm text-muted-foreground">{pageDescription}</p>
           </div>
         )}
         <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
@@ -366,6 +392,7 @@ export function BookingCalendar({ lockedTherapistId, hideTitle }: BookingCalenda
                 rooms={filteredRooms}
                 bookings={filteredBookings}
                 selectedDate={selectedDate}
+                holidays={holidays}
                 onSelectBooking={handleSelectBooking}
                 onEmptySlotClick={
                   !lockedTherapistId && resourcesReady ? handleEmptySlotClick : undefined
@@ -404,10 +431,6 @@ export function BookingCalendar({ lockedTherapistId, hideTitle }: BookingCalenda
         }}
         onComplete={lockedTherapistId ? undefined : () => void handleComplete()}
         viewerRole={lockedTherapistId ? 'therapist' : 'admin'}
-        onNotesSaved={(updated) => {
-          setSelectedBooking(updated);
-          setBookings((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
-        }}
       />
 
       <BookingFormModal
@@ -433,9 +456,8 @@ export function BookingCalendar({ lockedTherapistId, hideTitle }: BookingCalenda
         onSuccess={(newStartTime) => {
           if (newStartTime) {
             setSelectedDate(new Date(newStartTime));
-          } else {
-            void loadData();
           }
+          void loadData();
         }}
       />
 

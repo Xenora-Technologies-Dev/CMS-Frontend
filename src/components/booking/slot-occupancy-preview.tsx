@@ -7,7 +7,7 @@ import {
   type SlotValidationInput,
   type SlotValidationIssue,
 } from '@/lib/booking-validation';
-import { cn, formatTime } from '@/lib/utils';
+import { cn, formatTime, formatTimeInputValue } from '@/lib/utils';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useMemo } from 'react';
 
@@ -52,8 +52,8 @@ export function SlotOccupancyPreview({ input, issues }: SlotOccupancyPreviewProp
 
       <div className="space-y-2">
         <div className="flex justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
-          <span>08:00</span>
-          <span>18:00</span>
+          <span>{formatTimeInputValue('08:00')}</span>
+          <span>{formatTimeInputValue('18:00')}</span>
         </div>
         <div className="relative h-10 rounded-md border bg-white">
           {previewItems.map((item) => {

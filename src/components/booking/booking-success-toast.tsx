@@ -44,7 +44,7 @@ export function BookingSuccessToast({ booking, onDismiss }: BookingSuccessToastP
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
+    hour12: true,
   });
 
   async function handleViewSlip() {
@@ -101,12 +101,14 @@ export function BookingSuccessToast({ booking, onDismiss }: BookingSuccessToastP
               <div>
                 <dt className="text-xs text-muted-foreground">Time of Therapy</dt>
                 <dd className="font-medium text-slate-900">
-                  {booking.therapy.name} · {therapyTime}
+                  {booking.therapy?.name ?? 'Appointment'} · {therapyTime}
                 </dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Therapist</dt>
-                <dd className="font-medium text-slate-900">{getTherapistName(booking.therapist)}</dd>
+                <dd className="font-medium text-slate-900">
+                  {booking.therapist ? getTherapistName(booking.therapist) : '—'}
+                </dd>
               </div>
             </dl>
 

@@ -1,7 +1,7 @@
 'use client';
 
 import type { AvailableSlot, AvailableWindow } from '@/lib/booking-validation';
-import { cn, formatDuration } from '@/lib/utils';
+import { cn, formatDuration, formatTimeInputValue } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 
@@ -12,6 +12,8 @@ interface AvailableSlotsPickerProps {
   value?: string;
   onChange: (startTime: string) => void;
   loading?: boolean;
+  /** e.g. "therapist" or "doctor" for empty-state copy */
+  resourceLabel?: string;
 }
 
 export function AvailableSlotsPicker({
@@ -21,6 +23,7 @@ export function AvailableSlotsPicker({
   value,
   onChange,
   loading,
+  resourceLabel = 'therapist',
 }: AvailableSlotsPickerProps) {
   if (loading) {
     return (
@@ -34,7 +37,7 @@ export function AvailableSlotsPicker({
   if (windows.length === 0) {
     return (
       <div className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-        No open periods for this therapist on the selected date.
+        No open periods for this {resourceLabel} on the selected date.
       </div>
     );
   }
@@ -60,7 +63,7 @@ export function AvailableSlotsPicker({
             key={`${window.start}-${window.end}`}
             className="rounded-full border bg-white px-2 py-0.5 text-[11px] text-muted-foreground"
           >
-            Open {window.start}–{window.end}
+            Open {formatTimeInputValue(window.start)}–{formatTimeInputValue(window.end)}
           </span>
         ))}
       </div>

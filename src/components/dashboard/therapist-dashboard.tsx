@@ -1,11 +1,13 @@
 'use client';
 
+import { BookingsNeedsAttentionPanel } from '@/components/booking/bookings-needs-attention-panel';
 import { fetchTherapistDashboardData } from '@/lib/therapist-dashboard-api';
 import type { Booking } from '@/lib/types';
 import type { LeaveRequest } from '@/lib/leave-api';
 import { TodaySchedule } from '@/components/dashboard/today-schedule';
 import { UpcomingAppointments } from '@/components/dashboard/upcoming-appointments';
 import { LeaveStatusBadge } from '@/components/leave/leave-status-badge';
+import { formatDateTime } from '@/lib/utils';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useNotifications } from '@/components/providers/notifications-provider';
 import { useSocketEvent } from '@/components/providers/socket-provider';
@@ -107,6 +109,8 @@ export function TherapistDashboard() {
         </div>
       )}
 
+      <BookingsNeedsAttentionPanel compact />
+
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <TodaySchedule bookings={todayBookings} calendarHref="/therapist/calendar" />
@@ -121,7 +125,7 @@ export function TherapistDashboard() {
                 Leave Status
               </CardTitle>
               <Link
-                href="/therapist/leaves"
+                href="/therapist/leaves/management"
                 className="text-xs font-medium text-primary hover:underline"
               >
                 Manage
@@ -135,8 +139,8 @@ export function TherapistDashboard() {
                     <span className="text-sm font-medium text-emerald-900">On approved leave</span>
                   </div>
                   <p className="mt-2 text-sm text-emerald-800">
-                    {new Date(activeLeave.startDate).toLocaleDateString('en-GB')} –{' '}
-                    {new Date(activeLeave.endDate).toLocaleDateString('en-GB')}
+                    {formatDateTime(activeLeave.startDateTime)} –{' '}
+                    {formatDateTime(activeLeave.endDateTime)}
                   </p>
                 </div>
               ) : pendingLeave ? (
@@ -188,7 +192,7 @@ export function TherapistDashboard() {
                           month: 'short',
                           hour: '2-digit',
                           minute: '2-digit',
-                          hour12: false,
+                          hour12: true,
                         })}
                       </p>
                     </button>

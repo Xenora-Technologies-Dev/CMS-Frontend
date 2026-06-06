@@ -8,6 +8,7 @@ export const AppFeature = {
   MANAGE_BOOKINGS: 'manage_bookings',
   MANAGE_PATIENTS: 'manage_patients',
   MANAGE_THERAPISTS: 'manage_therapists',
+  MANAGE_DOCTORS: 'manage_doctors',
   MANAGE_ROOMS: 'manage_rooms',
   MANAGE_THERAPIES: 'manage_therapies',
   MANAGE_INSURANCE: 'manage_insurance',
@@ -25,6 +26,11 @@ const ALL_FEATURES: AppFeatureKey[] = Object.values(AppFeature);
 const ROLE_FEATURES: Record<UserRole, AppFeatureKey[]> = {
   ADMIN: ALL_FEATURES,
   THERAPIST: [
+    AppFeature.MANAGE_BOOKINGS,
+    AppFeature.MANAGE_PATIENTS,
+    AppFeature.COMPLETE_APPOINTMENTS,
+  ],
+  DOCTOR: [
     AppFeature.MANAGE_BOOKINGS,
     AppFeature.MANAGE_PATIENTS,
     AppFeature.COMPLETE_APPOINTMENTS,

@@ -9,7 +9,7 @@ export interface ListUsersParams {
   page?: number;
   limit?: number;
   search?: string;
-  role?: 'ADMIN' | 'THERAPIST';
+  role?: 'ADMIN' | 'THERAPIST' | 'DOCTOR';
   isActive?: boolean;
 }
 

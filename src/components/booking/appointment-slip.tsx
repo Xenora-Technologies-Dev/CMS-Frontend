@@ -2,7 +2,7 @@
 
 import type { Booking } from '@/lib/types';
 import { formatClinicLocation, getClinicDisplayName, type Clinic } from '@/lib/clinic-api';
-import { formatTime, getPatientName, getTherapistName } from '@/lib/utils';
+import { formatTime, getDoctorName, getPatientName } from '@/lib/utils';
 import {
   downloadAppointmentSlipPdf,
   printAppointmentSlipPdf,
@@ -94,6 +94,7 @@ export function AppointmentSlipDialog({
   });
 
   const isBusy = busy !== null;
+  const isConsultation = booking.bookingType === 'CONSULTATION';
 
   return (
     <>
@@ -109,59 +110,140 @@ export function AppointmentSlipDialog({
             <DialogTitle>Appointment Confirmation Slip</DialogTitle>
           </DialogHeader>
 
-          <div className="overflow-hidden rounded-xl border-2 border-blue-800">
-            <div className="bg-gradient-to-br from-blue-800 to-blue-500 px-6 py-5 text-center text-white sm:px-8 sm:py-6">
+          <div
+            className={
+              isConsultation
+                ? 'overflow-hidden rounded-xl border-2 border-violet-800'
+                : 'overflow-hidden rounded-xl border-2 border-blue-800'
+            }
+          >
+            <div
+              className={
+                isConsultation
+                  ? 'bg-gradient-to-br from-violet-800 to-violet-500 px-6 py-5 text-center text-white sm:px-8 sm:py-6'
+                  : 'bg-gradient-to-br from-blue-800 to-blue-500 px-6 py-5 text-center text-white sm:px-8 sm:py-6'
+              }
+            >
               <h2 className="text-lg font-bold tracking-wide sm:text-xl">{clinicName}</h2>
               {(clinicLocation || clinicPhone) && (
-                <p className="mt-1 text-xs text-blue-100">
+                <p className={`mt-1 text-xs ${isConsultation ? 'text-violet-100' : 'text-blue-100'}`}>
                   {[clinicLocation, clinicPhone].filter(Boolean).join(' · ')}
                 </p>
               )}
               <p className="mt-1 text-xs uppercase tracking-[0.2em] opacity-90">
-                Appointment Confirmation
+                {isConsultation ? 'Consultation Confirmation' : 'Appointment Confirmation'}
               </p>
             </div>
             <div className="bg-white p-5 sm:p-8">
-              <span className="inline-block rounded-full bg-blue-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-800">
-                Confirmed Appointment
+              <span
+                className={
+                  isConsultation
+                    ? 'inline-block rounded-full bg-violet-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-violet-800'
+                    : 'inline-block rounded-full bg-blue-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-800'
+                }
+              >
+                {isConsultation ? 'Confirmed Consultation' : 'Confirmed Appointment'}
               </span>
               <p className="mt-4 text-xl font-bold text-slate-900 sm:text-2xl">
                 {getPatientName(booking.patient)}
               </p>
               <p className="text-sm text-slate-500">MRN: {booking.patient.medicalRecordNo}</p>
 
-              <div className="mt-5 rounded-lg border border-sky-200 bg-sky-50 p-4 text-center">
-                <p className="text-sm font-semibold text-sky-700">{appointmentDate}</p>
-                <p className="mt-1 text-2xl font-bold text-sky-900 sm:text-3xl">
+              <div
+                className={
+                  isConsultation
+                    ? 'mt-5 rounded-lg border border-violet-200 bg-violet-50 p-4 text-center'
+                    : 'mt-5 rounded-lg border border-sky-200 bg-sky-50 p-4 text-center'
+                }
+              >
+                <p
+                  className={
+                    isConsultation
+                      ? 'text-sm font-semibold text-violet-700'
+                      : 'text-sm font-semibold text-sky-700'
+                  }
+                >
+                  {appointmentDate}
+                </p>
+                <p
+                  className={
+                    isConsultation
+                      ? 'mt-1 text-2xl font-bold text-violet-900 sm:text-3xl'
+                      : 'mt-1 text-2xl font-bold text-sky-900 sm:text-3xl'
+                  }
+                >
                   {formatTime(booking.startTime)} – {formatTime(booking.endTime)}
                 </p>
               </div>
 
               <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                    Therapy
-                  </p>
-                  <p className="font-semibold text-slate-800">{booking.therapy.name}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                    Duration
-                  </p>
-                  <p className="font-semibold text-slate-800">{booking.durationMinutes} minutes</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                    Therapist
-                  </p>
-                  <p className="font-semibold text-slate-800">{getTherapistName(booking.therapist)}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                    Room
-                  </p>
-                  <p className="font-semibold text-slate-800">{booking.room.name}</p>
-                </div>
+                {isConsultation ? (
+                  <>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Consultation
+                      </p>
+                      <p className="font-semibold text-slate-800">Doctor Consultation</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Duration
+                      </p>
+                      <p className="font-semibold text-slate-800">
+                        {booking.durationMinutes} minutes
+                      </p>
+                    </div>
+                    {booking.doctor && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          Doctor
+                        </p>
+                        <p className="font-semibold text-slate-800">
+                          {getDoctorName(booking.doctor)}
+                        </p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Mode
+                      </p>
+                      <p className="font-semibold text-slate-800">
+                        {booking.bookingMode === 'CALL' ? 'Call' : 'Walk-In'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Room
+                      </p>
+                      <p className="font-semibold text-slate-800">{booking.room.name}</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Therapy
+                      </p>
+                      <p className="font-semibold text-slate-800">
+                        {booking.therapy?.name ?? '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Duration
+                      </p>
+                      <p className="font-semibold text-slate-800">
+                        {booking.durationMinutes} minutes
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Room
+                      </p>
+                      <p className="font-semibold text-slate-800">{booking.room.name}</p>
+                    </div>
+                  </>
+                )}
               </div>
 
               {booking.notes && (

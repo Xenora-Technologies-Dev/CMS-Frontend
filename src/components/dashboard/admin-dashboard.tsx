@@ -1,5 +1,6 @@
 'use client';
 
+import { BookingsNeedsAttentionPanel } from '@/components/booking/bookings-needs-attention-panel';
 import { fetchAdminDashboardData } from '@/lib/dashboard-api';
 import type { ActivityItem, DashboardStats } from '@/lib/dashboard-api';
 import type { Booking } from '@/lib/types';
@@ -91,6 +92,8 @@ export function AdminDashboard() {
           description="Awaiting approval"
         />
       </div>
+
+      <BookingsNeedsAttentionPanel compact />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">

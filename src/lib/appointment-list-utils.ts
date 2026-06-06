@@ -1,6 +1,11 @@
 import type { Booking, BookingStatus } from '@/lib/types';
 
-const ACTIVE_STATUSES: BookingStatus[] = ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS'];
+const ACTIVE_STATUSES: BookingStatus[] = [
+  'SCHEDULED',
+  'CONFIRMED',
+  'IN_PROGRESS',
+  'PENDING_CONFIRMATION',
+];
 
 export function isUpcomingBooking(booking: Booking): boolean {
   if (!ACTIVE_STATUSES.includes(booking.status)) return false;
@@ -11,12 +16,13 @@ export function getAppointmentCardBorderClass(booking: Booking): string {
   if (booking.status === 'COMPLETED') return 'border-l-4 border-l-emerald-500';
   if (booking.status === 'CANCELLED') return 'border-l-4 border-l-red-500';
   if (booking.status === 'RESCHEDULED') return 'border-l-4 border-l-orange-500';
+  if (booking.status === 'PENDING_CONFIRMATION') return 'border-l-4 border-l-orange-500';
   if (isUpcomingBooking(booking)) return 'border-l-4 border-l-blue-500';
   return 'border-l-4 border-l-slate-300';
 }
 
 export function canEditBooking(booking: Booking): boolean {
-  return ['SCHEDULED', 'CONFIRMED'].includes(booking.status);
+  return ['SCHEDULED', 'CONFIRMED', 'PENDING_CONFIRMATION'].includes(booking.status);
 }
 
 export function canRestoreBooking(booking: Booking): boolean {
@@ -24,12 +30,14 @@ export function canRestoreBooking(booking: Booking): boolean {
 }
 
 export function canCompleteBooking(booking: Booking): boolean {
-  return ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS'].includes(booking.status);
+  return ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS', 'PENDING_CONFIRMATION'].includes(
+    booking.status,
+  );
 }
 
 export function isPastDueBooking(booking: Booking): boolean {
   return (
-    ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS'].includes(booking.status) &&
+    ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS', 'PENDING_CONFIRMATION'].includes(booking.status) &&
     new Date(booking.endTime) <= new Date()
   );
 }
@@ -41,12 +49,12 @@ export function formatUserName(user?: { firstName: string; lastName: string } | 
 
 export function formatDateTime(iso?: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-GB', {
+  return new Date(iso).toLocaleString('en-US', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
-    hour: '2-digit',
+    hour: 'numeric',
     minute: '2-digit',
-    hour12: false,
+    hour12: true,
   });
 }

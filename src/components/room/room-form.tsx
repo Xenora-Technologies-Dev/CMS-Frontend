@@ -27,6 +27,7 @@ export function RoomForm({ mode, roomId }: RoomFormProps) {
   const [form, setForm] = useState({
     name: '',
     code: '',
+    roomType: 'THERAPY' as 'THERAPY' | 'CONSULTATION',
     floor: '',
     capacity: '1',
     equipment: '',
@@ -45,6 +46,7 @@ export function RoomForm({ mode, roomId }: RoomFormProps) {
       setForm({
         name: room.name,
         code: room.code ?? '',
+        roomType: room.roomType ?? 'THERAPY',
         floor: room.floor ?? '',
         capacity: String(room.capacity ?? 1),
         equipment: room.equipment ?? '',
@@ -69,6 +71,7 @@ export function RoomForm({ mode, roomId }: RoomFormProps) {
     const payload = {
       name: form.name.trim(),
       code: form.code.trim() || undefined,
+      roomType: form.roomType,
       floor: form.floor.trim() || undefined,
       capacity: parseInt(form.capacity, 10) || 1,
       equipment: form.equipment.trim() || undefined,
@@ -124,6 +127,23 @@ export function RoomForm({ mode, roomId }: RoomFormProps) {
                 onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
                 placeholder="e.g. R-101"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Room type *</Label>
+              <Select
+                value={form.roomType}
+                onValueChange={(v) =>
+                  setForm((f) => ({ ...f, roomType: v as 'THERAPY' | 'CONSULTATION' }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="THERAPY">Therapy</SelectItem>
+                  <SelectItem value="CONSULTATION">Consultation</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">

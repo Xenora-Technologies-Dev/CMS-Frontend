@@ -1,8 +1,9 @@
 'use client';
 
 import { fetchPatientBookings, fetchPatientProfile } from '@/lib/booking-api';
-import type { Booking, PatientProfile } from '@/lib/types';
-import { cn, formatTime, getPatientName, getTherapistName } from '@/lib/utils';
+import { listTreatmentPlans } from '@/lib/treatment-plan-api';
+import type { Booking, PatientProfile, TreatmentPlan } from '@/lib/types';
+import { cn, formatDateTime, getPatientName, getTherapistName } from '@/lib/utils';
 import { BookingStatusBadge } from '@/components/booking/booking-status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ import {
   RefreshCw,
   Stethoscope,
   User,
+  Package,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -32,14 +34,18 @@ function formatDate(date: string | null | undefined): string {
   });
 }
 
-function formatDateTime(date: string): string {
-  const d = new Date(date);
-  return `${d.toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })} · ${formatTime(date)}`;
+function formatDateTimeLocal(date: string): string {
+  return formatDateTime(date);
+}
+
+function TreatmentPlanStatusBadge({ status }: { status: TreatmentPlan['status'] }) {
+  const variants: Record<TreatmentPlan['status'], 'default' | 'success' | 'destructive' | 'muted'> = {
+    ACTIVE: 'default',
+    COMPLETED: 'success',
+    EXPIRED: 'destructive',
+    CANCELLED: 'muted',
+  };
+  return <Badge variant={variants[status]}>{status}</Badge>;
 }
 
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
@@ -80,11 +86,13 @@ function BookingRow({ booking }: { booking: Booking }) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-slate-50/50 p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 space-y-1">
-        <p className="text-sm font-medium text-slate-900">{booking.therapy.name}</p>
-        <p className="text-xs text-muted-foreground">
-          {getTherapistName(booking.therapist)} · {booking.room.name}
+        <p className="text-sm font-medium text-slate-900">
+          {booking.therapy?.name ?? (booking.bookingType === 'CONSULTATION' ? 'Consultation' : '—')}
         </p>
-        <p className="text-xs text-muted-foreground">{formatDateTime(booking.startTime)}</p>
+        <p className="text-xs text-muted-foreground">
+          {booking.therapist ? getTherapistName(booking.therapist) : booking.doctor ? `${booking.doctor.user.firstName} ${booking.doctor.user.lastName}` : '—'} · {booking.room.name}
+        </p>
+        <p className="text-xs text-muted-foreground">{formatDateTimeLocal(booking.startTime)}</p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <span className="text-xs text-muted-foreground">{booking.durationMinutes} min</span>
@@ -101,6 +109,7 @@ interface PatientProfileViewProps {
 export function PatientProfileView({ patientId }: PatientProfileViewProps) {
   const [patient, setPatient] = useState<PatientProfile | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [treatmentPlans, setTreatmentPlans] = useState<TreatmentPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,12 +117,14 @@ export function PatientProfileView({ patientId }: PatientProfileViewProps) {
     setLoading(true);
     setError(null);
     try {
-      const [profileResult, bookingList] = await Promise.all([
+      const [profileResult, bookingList, plansResult] = await Promise.all([
         fetchPatientProfile(patientId),
         fetchPatientBookings(patientId),
+        listTreatmentPlans({ patientId, limit: 50 }),
       ]);
       setPatient(profileResult.patient);
       setBookings(bookingList);
+      setTreatmentPlans(plansResult.data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load patient profile');
     } finally {
@@ -154,6 +165,7 @@ export function PatientProfileView({ patientId }: PatientProfileViewProps) {
       { therapy: Booking['therapy']; count: number; lastDate: string }
     >();
     for (const booking of completed) {
+      if (!booking.therapyId || !booking.therapy) continue;
       const existing = byTherapy.get(booking.therapyId);
       if (existing) {
         existing.count += 1;
@@ -375,19 +387,65 @@ export function PatientProfileView({ patientId }: PatientProfileViewProps) {
             )}
           </SectionCard>
 
+          <SectionCard icon={Package} title="Treatment Plans">
+            {treatmentPlans.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No treatment plans on file</p>
+            ) : (
+              <div className="space-y-4">
+                {treatmentPlans.map((plan) => (
+                  <div key={plan.id} className="rounded-lg border bg-slate-50/50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-slate-900">{plan.therapy.name}</p>
+                      <TreatmentPlanStatusBadge status={plan.status} />
+                    </div>
+                    <dl className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+                      <div>Total sessions: {plan.totalSessions}</div>
+                      <div>Completed: {plan.completedSessions}</div>
+                      <div>Remaining: {plan.remainingSessions}</div>
+                      <div>Expiry: {formatDate(plan.expiryDate)}</div>
+                    </dl>
+                    {plan.sessions && plan.sessions.length > 0 && (
+                      <div className="mt-3 border-t pt-2">
+                        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Session history
+                        </p>
+                        <div className="space-y-1">
+                          {plan.sessions.map((session) => (
+                            <div
+                              key={session.id}
+                              className="flex flex-wrap items-center justify-between gap-2 text-xs"
+                            >
+                              <span>
+                                Session {session.sessionNumber} ·{' '}
+                                {session.booking.therapist
+                                  ? getTherapistName(session.booking.therapist)
+                                  : '—'}
+                              </span>
+                              <span>{formatDateTimeLocal(session.completedAt)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+
           <SectionCard icon={Stethoscope} title="Previous Therapies">
             {previousTherapies.length === 0 ? (
               <p className="text-sm text-muted-foreground">No completed therapies yet</p>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 {previousTherapies.map(({ therapy, count, lastDate }) => (
-                  <div key={therapy.id} className="rounded-lg border bg-slate-50/50 p-3">
-                    <p className="text-sm font-medium text-slate-900">{therapy.name}</p>
+                  <div key={therapy?.id ?? lastDate} className="rounded-lg border bg-slate-50/50 p-3">
+                    <p className="text-sm font-medium text-slate-900">{therapy?.name ?? '—'}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {count} session{count === 1 ? '' : 's'} · Last: {formatDate(lastDate)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {therapy.durationMinutes} min per session
+                      {therapy?.durationMinutes ?? 0} min per session
                     </p>
                   </div>
                 ))}

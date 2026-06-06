@@ -43,6 +43,7 @@ const emptyCreate = {
   colorCode: '#3B82F6',
   consultationStartTime: '09:00',
   consultationEndTime: '17:00',
+  requiresConsultationHours: false,
 };
 
 const emptyEdit = {
@@ -52,6 +53,7 @@ const emptyEdit = {
   colorCode: '#3B82F6',
   consultationStartTime: '09:00',
   consultationEndTime: '17:00',
+  requiresConsultationHours: false,
   isActive: true,
   newPassword: '',
   confirmPassword: '',
@@ -79,6 +81,7 @@ export function TherapistForm({ mode, therapistId }: TherapistFormProps) {
         colorCode: therapist.colorCode ?? '#3B82F6',
         consultationStartTime: therapist.consultationStartTime ?? '09:00',
         consultationEndTime: therapist.consultationEndTime ?? '17:00',
+        requiresConsultationHours: therapist.requiresConsultationHours ?? false,
         isActive: therapist.isActive,
         newPassword: '',
         confirmPassword: '',
@@ -143,6 +146,7 @@ export function TherapistForm({ mode, therapistId }: TherapistFormProps) {
           colorCode: normalizeColorCode(createForm.colorCode),
           consultationStartTime: normalizeTime(createForm.consultationStartTime),
           consultationEndTime: normalizeTime(createForm.consultationEndTime),
+          requiresConsultationHours: createForm.requiresConsultationHours,
         });
         const user: CreatedTherapistUser = result.user;
         storeTherapistPassword(user.id, createForm.password);
@@ -170,6 +174,7 @@ export function TherapistForm({ mode, therapistId }: TherapistFormProps) {
           colorCode: editForm.colorCode,
           consultationStartTime: editForm.consultationStartTime,
           consultationEndTime: editForm.consultationEndTime,
+          requiresConsultationHours: editForm.requiresConsultationHours,
           isActive: editForm.isActive,
         });
         router.push(`/admin/therapists/${therapistId}`);
@@ -319,6 +324,7 @@ function TherapistDetailsFields({
     colorCode: string;
     consultationStartTime: string;
     consultationEndTime: string;
+    requiresConsultationHours?: boolean;
     isActive?: boolean;
   };
   onChange: (patch: Partial<typeof values>) => void;
@@ -389,6 +395,18 @@ function TherapistDetailsFields({
             value={values.bio}
             onChange={(e) => onChange({ bio: e.target.value })}
           />
+        </div>
+        <div className="flex items-center gap-2 sm:col-span-2">
+          <input
+            id="requiresConsultationHours"
+            type="checkbox"
+            checked={values.requiresConsultationHours ?? false}
+            onChange={(e) => onChange({ requiresConsultationHours: e.target.checked })}
+            className="h-4 w-4 rounded border"
+          />
+          <Label htmlFor="requiresConsultationHours" className="font-normal">
+            Requires consultation hours
+          </Label>
         </div>
         {showStatus && values.isActive !== undefined && (
           <div className="space-y-2 sm:col-span-2">

@@ -14,8 +14,9 @@ import { canEditBooking } from '@/lib/appointment-list-utils';
 import {
   cn,
   formatTime,
+  getBookingStaffColor,
+  getDoctorName,
   getPatientName,
-  getTherapistColor,
   getTherapistName,
 } from '@/lib/utils';
 import { Calendar, Eye, MoreVertical, Pencil, XCircle } from 'lucide-react';
@@ -64,9 +65,17 @@ export function BookingCard({
   onPostpone,
   onCancel,
 }: BookingCardProps) {
-  const color = getTherapistColor(booking.therapist.colorCode);
+  const color = getBookingStaffColor(booking);
+  const isConsultation = booking.bookingType === 'CONSULTATION';
   const isInactive = ['CANCELLED', 'RESCHEDULED', 'COMPLETED', 'NO_SHOW'].includes(booking.status);
   const editable = showActionsMenu && canEditBooking(booking);
+  const staffName = isConsultation
+    ? booking.doctor
+      ? getDoctorName(booking.doctor)
+      : 'Doctor'
+    : booking.therapist
+      ? getTherapistName(booking.therapist)
+      : 'Therapist';
 
   return (
     <div
@@ -91,10 +100,10 @@ export function BookingCard({
         <BookingStatusBadge status={booking.status} />
       </div>
       <p className={cn('truncate text-slate-600', compact ? 'text-[10px]' : 'text-xs')}>
-        {booking.therapy.name}
+        {isConsultation ? 'Consultation' : (booking.therapy?.name ?? 'Therapy')}
       </p>
       <p className={cn('truncate text-slate-500', compact ? 'text-[10px]' : 'text-xs')}>
-        {getTherapistName(booking.therapist)}
+        {staffName}
       </p>
       <div className={cn('mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-slate-500', compact ? 'text-[10px]' : 'text-xs')}>
         <span>

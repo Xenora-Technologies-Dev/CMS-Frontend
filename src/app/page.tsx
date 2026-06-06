@@ -17,6 +17,8 @@ export default function HomePage() {
     }
     if (user?.role === 'THERAPIST') {
       router.replace('/therapist');
+    } else if (user?.role === 'DOCTOR') {
+      router.replace('/doctor');
     } else {
       router.replace('/admin');
     }

@@ -50,12 +50,12 @@ function deriveUpcomingBookings(bookings: Booking[], limit = 8): Booking[] {
 function deriveRecentActivity(bookings: Booking[], limit = 10): ActivityItem[] {
   const items: ActivityItem[] = bookings.map((booking) => {
     const patient = `${booking.patient.firstName} ${booking.patient.lastName}`;
-    const time = `${booking.therapy.name} · ${new Date(booking.startTime).toLocaleString('en-GB', {
+    const time = `${booking.therapy?.name ?? 'Appointment'} · ${new Date(booking.startTime).toLocaleString('en-GB', {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
       minute: '2-digit',
-      hour12: false,
+      hour12: true,
     })}`;
 
     if (booking.status === 'CANCELLED') {
@@ -161,8 +161,8 @@ export async function fetchRecentActivity(limit = 10): Promise<ActivityItem[]> {
 export interface LeaveRequestItem {
   id: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
-  startDate: string;
-  endDate: string;
+  startDateTime: string;
+  endDateTime: string;
   reason: string;
   therapist: {
     id: string;

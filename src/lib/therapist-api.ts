@@ -26,6 +26,7 @@ export interface CreateTherapistPayload {
   colorCode?: string;
   consultationStartTime?: string;
   consultationEndTime?: string;
+  requiresConsultationHours?: boolean;
 }
 
 export interface UpdateTherapistPayload {
@@ -35,6 +36,7 @@ export interface UpdateTherapistPayload {
   colorCode?: string | null;
   consultationStartTime?: string | null;
   consultationEndTime?: string | null;
+  requiresConsultationHours?: boolean;
   isActive?: boolean;
 }
 

@@ -18,7 +18,7 @@ import {
   formatUserName,
   getAppointmentCardBorderClass,
 } from '@/lib/appointment-list-utils';
-import { formatTime, getPatientName, getTherapistName } from '@/lib/utils';
+import { formatTime, getDoctorName, getPatientName, getTherapistName } from '@/lib/utils';
 import {
   CheckCircle2,
   Calendar,
@@ -137,8 +137,26 @@ export function AppointmentListCard({
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <InfoItem icon={Stethoscope} label="Therapy" value={booking.therapy.name} />
-        <InfoItem icon={User} label="Therapist" value={getTherapistName(booking.therapist)} />
+        <InfoItem
+          icon={Stethoscope}
+          label={booking.bookingType === 'CONSULTATION' ? 'Type' : 'Therapy'}
+          value={
+            booking.bookingType === 'CONSULTATION'
+              ? 'Consultation'
+              : (booking.therapy?.name ?? '—')
+          }
+        />
+        <InfoItem
+          icon={User}
+          label={booking.bookingType === 'CONSULTATION' ? 'Doctor' : 'Therapist'}
+          value={
+            booking.bookingType === 'CONSULTATION' && booking.doctor
+              ? getDoctorName(booking.doctor)
+              : booking.therapist
+                ? getTherapistName(booking.therapist)
+                : '—'
+          }
+        />
         <InfoItem icon={DoorOpen} label="Room" value={booking.room.name} />
         <InfoItem icon={Calendar} label="Date" value={appointmentDate} />
         <InfoItem

@@ -33,10 +33,13 @@ export const THERAPIST_NAV_MAIN: TherapistNavItem[] = [
     items: [{ title: 'My Calendar', href: '/therapist/calendar' }],
   },
   {
-    type: 'link',
-    title: 'Leave',
-    href: '/therapist/leaves',
+    type: 'group',
+    title: 'Leaves',
     icon: Palmtree,
+    items: [
+      { title: 'Leave Management', href: '/therapist/leaves/management' },
+      { title: 'Leave History', href: '/therapist/leaves/history' },
+    ],
   },
 ];
 
@@ -79,9 +82,13 @@ const PAGE_META: Record<string, TherapistPageMeta> = {
     title: 'My Calendar',
     description: 'View your scheduled appointments.',
   },
-  '/therapist/leaves': {
-    title: 'Leave Requests',
-    description: 'Request and track your leave.',
+  '/therapist/leaves/management': {
+    title: 'Leave Management',
+    description: 'Request leave and track pending approvals.',
+  },
+  '/therapist/leaves/history': {
+    title: 'Leave History',
+    description: 'Your upcoming, today’s, and past leave records.',
   },
   '/therapist/notifications': {
     title: 'Notifications',

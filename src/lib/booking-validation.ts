@@ -1,7 +1,16 @@
-import type { Booking, BookingStatus, Therapist, TherapistAvailability } from '@/lib/types';
+import type {
+  Booking,
+  BookingStatus,
+  Doctor,
+  PublicHoliday,
+  Therapist,
+  TherapistAvailability,
+} from '@/lib/types';
 import {
   combineDateAndTime,
+  endOfDay,
   formatTime,
+  formatTimeInputValue,
   generateTimeSlots,
   getPatientName,
   getTherapistName,
@@ -11,7 +20,12 @@ import {
   formatDateInput,
 } from '@/lib/utils';
 
-const ACTIVE_STATUSES: BookingStatus[] = ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS'];
+const ACTIVE_STATUSES: BookingStatus[] = [
+  'SCHEDULED',
+  'CONFIRMED',
+  'IN_PROGRESS',
+  'PENDING_CONFIRMATION',
+];
 
 const WEEKDAY_TO_ENUM = [
   'SUNDAY',
@@ -23,6 +37,12 @@ const WEEKDAY_TO_ENUM = [
   'SATURDAY',
 ] as const;
 
+export interface ApprovedLeaveBlock {
+  startDateTime: string;
+  endDateTime: string;
+  isFullDay?: boolean;
+}
+
 export interface SlotValidationInput {
   date: string;
   startTime: string;
@@ -32,6 +52,7 @@ export interface SlotValidationInput {
   therapist?: Therapist;
   availability?: TherapistAvailability[];
   dayBookings?: Booking[];
+  approvedLeaves?: ApprovedLeaveBlock[];
   /** Exclude this booking from conflict checks (edit / reschedule preview). */
   excludeBookingId?: string;
 }
@@ -47,6 +68,7 @@ export interface SlotValidationIssue {
     | 'past'
     | 'slot_alignment'
     | 'duration'
+    | 'leave'
     | 'other';
 }
 
@@ -185,12 +207,49 @@ function subtractMinuteBlocks(windows: MinuteWindow[], blocks: MinuteWindow[]): 
   return free;
 }
 
+function leaveOverlapsLocalDate(leave: ApprovedLeaveBlock, date: string): boolean {
+  const dayStart = startOfDay(parseDateInput(date));
+  const dayEnd = endOfDay(parseDateInput(date));
+  const leaveStart = new Date(leave.startDateTime);
+  const leaveEnd = new Date(leave.endDateTime);
+  return leaveStart < dayEnd && leaveEnd > dayStart;
+}
+
+function getLeaveMinuteBlocks(
+  approvedLeaves: ApprovedLeaveBlock[] | undefined,
+  date: string,
+): MinuteWindow[] {
+  if (!approvedLeaves?.length) return [];
+
+  return approvedLeaves
+    .filter((leave) => leaveOverlapsLocalDate(leave, date))
+    .map((leave) => {
+      if (leave.isFullDay) {
+        return { startMin: 0, endMin: 24 * 60 };
+      }
+      const leaveStart = new Date(leave.startDateTime);
+      const leaveEnd = new Date(leave.endDateTime);
+      const dayStart = startOfDay(parseDateInput(date));
+      const startMin = Math.max(
+        0,
+        Math.floor((leaveStart.getTime() - dayStart.getTime()) / 60000),
+      );
+      const endMin = Math.min(
+        24 * 60,
+        Math.ceil((leaveEnd.getTime() - dayStart.getTime()) / 60000),
+      );
+      return { startMin, endMin };
+    })
+    .filter((block) => block.startMin < block.endMin);
+}
+
 export function computeAvailableWindows(input: {
   date: string;
   durationMinutes: number;
   therapist?: Therapist;
   availability?: TherapistAvailability[];
   dayBookings?: Booking[];
+  approvedLeaves?: ApprovedLeaveBlock[];
   excludeBookingId?: string;
 }): AvailableWindow[] {
   if (!input.date || !input.durationMinutes || !input.therapist) return [];
@@ -216,7 +275,12 @@ export function computeAvailableWindows(input: {
     input.excludeBookingId,
   );
 
-  const free = subtractMinuteBlocks(windows, therapistBookings);
+  const leaveBlocks = getLeaveMinuteBlocks(input.approvedLeaves, input.date);
+
+  const free = subtractMinuteBlocks(
+    subtractMinuteBlocks(windows, therapistBookings),
+    leaveBlocks,
+  );
 
   return free
     .filter((w) => w.endMin - w.startMin >= input.durationMinutes)
@@ -266,12 +330,233 @@ export function computeAvailableSlots(input: {
       slots.push({
         startTime,
         endTime,
-        label: `${startTime} – ${endTime}`,
+        label: `${formatTimeInputValue(startTime)} – ${formatTimeInputValue(endTime)}`,
       });
     }
   }
 
   return slots;
+}
+
+function getDoctorBookingBlocks(
+  dayBookings: Booking[],
+  doctorId: string,
+  date: string,
+  excludeBookingId?: string,
+): MinuteWindow[] {
+  return dayBookings
+    .filter(
+      (b) =>
+        bookingOnLocalDate(b, date) &&
+        ACTIVE_STATUSES.includes(b.status) &&
+        b.doctorId === doctorId &&
+        b.id !== excludeBookingId,
+    )
+    .map((b) => ({
+      startMin: timeToMinutes(toTimeInputValue(b.startTime)),
+      endMin: timeToMinutes(toTimeInputValue(b.endTime)),
+    }));
+}
+
+function getHolidayMinuteBlocks(
+  holidays: PublicHoliday[] | undefined,
+  date: string,
+): MinuteWindow[] {
+  if (!holidays?.length) return [];
+  const dayStart = startOfDay(parseDateInput(date));
+  const dayEnd = endOfDay(parseDateInput(date));
+
+  return holidays
+    .filter((holiday) => {
+      const start = new Date(holiday.startDateTime);
+      const end = new Date(holiday.endDateTime);
+      return start < dayEnd && end > dayStart;
+    })
+    .map((holiday) => {
+      if (holiday.isFullDay) {
+        return { startMin: 0, endMin: 24 * 60 };
+      }
+      const start = new Date(holiday.startDateTime);
+      const end = new Date(holiday.endDateTime);
+      const startMin = Math.max(0, Math.floor((start.getTime() - dayStart.getTime()) / 60000));
+      const endMin = Math.min(24 * 60, Math.ceil((end.getTime() - dayStart.getTime()) / 60000));
+      return { startMin, endMin };
+    })
+    .filter((block) => block.startMin < block.endMin);
+}
+
+function hasDoctorConflictAtSlot(
+  dayBookings: Booking[],
+  doctorId: string,
+  date: string,
+  startTime: string,
+  durationMinutes: number,
+  excludeBookingId?: string,
+): boolean {
+  const start = combineDateAndTime(parseDateInput(date), startTime);
+  const end = computeEndTimeFromSlot(date, startTime, durationMinutes);
+  return dayBookings.some(
+    (b) =>
+      b.id !== excludeBookingId &&
+      bookingOnLocalDate(b, date) &&
+      ACTIVE_STATUSES.includes(b.status) &&
+      b.doctorId === doctorId &&
+      rangesOverlap(start, end, new Date(b.startTime), new Date(b.endTime)),
+  );
+}
+
+function hasRoomConflictAtSlot(
+  dayBookings: Booking[],
+  roomId: string,
+  date: string,
+  startTime: string,
+  durationMinutes: number,
+  excludeBookingId?: string,
+): boolean {
+  const start = combineDateAndTime(parseDateInput(date), startTime);
+  const end = computeEndTimeFromSlot(date, startTime, durationMinutes);
+  return dayBookings.some(
+    (b) =>
+      b.id !== excludeBookingId &&
+      bookingOnLocalDate(b, date) &&
+      ACTIVE_STATUSES.includes(b.status) &&
+      b.roomId === roomId &&
+      rangesOverlap(start, end, new Date(b.startTime), new Date(b.endTime)),
+  );
+}
+
+export function computeConsultationAvailableWindows(input: {
+  date: string;
+  durationMinutes: number;
+  doctor?: Doctor;
+  dayBookings?: Booking[];
+  holidays?: PublicHoliday[];
+  excludeBookingId?: string;
+}): AvailableWindow[] {
+  if (!input.date || !input.durationMinutes || !input.doctor) return [];
+
+  const consultStart = input.doctor.consultationStartTime ?? '08:00';
+  const consultEnd = input.doctor.consultationEndTime ?? '18:00';
+  let windows: MinuteWindow[] = [
+    { startMin: timeToMinutes(consultStart), endMin: timeToMinutes(consultEnd) },
+  ];
+
+  const doctorBookings = getDoctorBookingBlocks(
+    input.dayBookings ?? [],
+    input.doctor.id,
+    input.date,
+    input.excludeBookingId,
+  );
+  const holidayBlocks = getHolidayMinuteBlocks(input.holidays, input.date);
+
+  const free = subtractMinuteBlocks(
+    subtractMinuteBlocks(windows, doctorBookings),
+    holidayBlocks,
+  );
+
+  return free
+    .filter((w) => w.endMin - w.startMin >= input.durationMinutes)
+    .map((w) => ({ start: minutesToTime(w.startMin), end: minutesToTime(w.endMin) }));
+}
+
+export function computeConsultationAvailableSlots(input: {
+  windows: AvailableWindow[];
+  durationMinutes: number;
+  date?: string;
+  dayBookings?: Booking[];
+  doctorId?: string;
+  roomId?: string;
+  stepMinutes?: number;
+  excludeBookingId?: string;
+}): AvailableSlot[] {
+  const {
+    windows,
+    durationMinutes,
+    date,
+    dayBookings,
+    doctorId,
+    roomId,
+    stepMinutes = 5,
+    excludeBookingId,
+  } = input;
+  if (!durationMinutes || windows.length === 0) return [];
+
+  const slots: AvailableSlot[] = [];
+  const now = new Date();
+  const isToday = date ? formatDateInput(now) === date : false;
+  const nowMin = isToday ? now.getHours() * 60 + now.getMinutes() : 0;
+
+  for (const window of windows) {
+    const startMin = timeToMinutes(window.start);
+    const endMin = timeToMinutes(window.end);
+    for (let t = startMin; t + durationMinutes <= endMin; t += stepMinutes) {
+      if (isToday && t < nowMin) continue;
+      const startTime = minutesToTime(t);
+      const endTime = minutesToTime(t + durationMinutes);
+
+      if (
+        date &&
+        doctorId &&
+        dayBookings &&
+        hasDoctorConflictAtSlot(
+          dayBookings,
+          doctorId,
+          date,
+          startTime,
+          durationMinutes,
+          excludeBookingId,
+        )
+      ) {
+        continue;
+      }
+
+      if (
+        date &&
+        roomId &&
+        dayBookings &&
+        hasRoomConflictAtSlot(
+          dayBookings,
+          roomId,
+          date,
+          startTime,
+          durationMinutes,
+          excludeBookingId,
+        )
+      ) {
+        continue;
+      }
+
+      slots.push({
+        startTime,
+        endTime,
+        label: `${formatTimeInputValue(startTime)} – ${formatTimeInputValue(endTime)}`,
+      });
+    }
+  }
+
+  return slots;
+}
+
+export function getConsultationAvailableRooms<T extends { id: string }>(
+  rooms: T[],
+  dayBookings: Booking[],
+  date: string,
+  startTime: string,
+  durationMinutes: number,
+  excludeBookingId?: string,
+): T[] {
+  if (!date || !startTime || !durationMinutes) return rooms;
+  return rooms.filter(
+    (room) =>
+      !hasRoomConflictAtSlot(
+        dayBookings,
+        room.id,
+        date,
+        startTime,
+        durationMinutes,
+        excludeBookingId,
+      ),
+  );
 }
 
 export function computeAvailableStartTimes(
@@ -474,9 +759,23 @@ export function validateBookingSlot(
       issues.push({
         type: 'error',
         code: 'room_conflict',
-        message: `Room already booked ${formatTime(roomConflict.startTime)}–${formatTime(roomConflict.endTime)} with ${getPatientName(roomConflict.patient)} (${getTherapistName(roomConflict.therapist)})`,
+        message: `Room already booked ${formatTime(roomConflict.startTime)}–${formatTime(roomConflict.endTime)} with ${getPatientName(roomConflict.patient)} (${roomConflict.therapist ? getTherapistName(roomConflict.therapist) : 'staff'})`,
       });
     }
+  }
+
+  const leaveBlocks = getLeaveMinuteBlocks(input.approvedLeaves, input.date);
+  const slotStartMin = timeToMinutes(slotStart);
+  const slotEndMin = timeToMinutes(slotEnd);
+  const leaveConflict = leaveBlocks.some(
+    (block) => slotStartMin < block.endMin && slotEndMin > block.startMin,
+  );
+  if (leaveConflict) {
+    issues.push({
+      type: 'error',
+      code: 'leave',
+      message: 'Therapist has approved leave during this time slot',
+    });
   }
 
   if (options?.overrideScheduleConstraints) {
@@ -505,7 +804,7 @@ export function buildSlotOccupancyPreview(input: SlotValidationInput): SlotOccup
     )
     .map((b) => ({
       id: b.id,
-      label: `${getPatientName(b.patient)} · ${getTherapistName(b.therapist)}`,
+      label: `${getPatientName(b.patient)} · ${b.therapist ? getTherapistName(b.therapist) : 'Consultation'}`,
       startTime: b.startTime,
       endTime: b.endTime,
       kind: b.therapistId === input.therapistId ? 'therapist' : 'room',

@@ -2,16 +2,18 @@
 
 import { LeaveRequestForm } from '@/components/leave/leave-request-form';
 import { LeaveStatusBadge } from '@/components/leave/leave-status-badge';
+import { BookingsNeedsAttentionPanel } from '@/components/booking/bookings-needs-attention-panel';
 import { useSocketEvent } from '@/components/providers/socket-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cancelLeaveRequest, listLeaveRequests, type LeaveRequest } from '@/lib/leave-api';
 import { SocketEvents } from '@/lib/socket-events';
 import { getFriendlyErrorMessage } from '@/lib/error-utils';
+import { formatDateTime } from '@/lib/utils';
 import { ProgressDialog } from '@/components/shared/progress-dialog';
 import { useProgressAction } from '@/hooks/use-progress-action';
 import { useAuth } from '@/components/auth/auth-provider';
-import { Loader2 } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 export function TherapistLeaveManagement() {
@@ -20,6 +22,7 @@ export function TherapistLeaveManagement() {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [conflictNotice, setConflictNotice] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -69,8 +72,8 @@ export function TherapistLeaveManagement() {
   }
 
   function formatDateRange(start: string, end: string) {
-    const s = new Date(start).toLocaleDateString('en-GB');
-    const e = new Date(end).toLocaleDateString('en-GB');
+    const s = formatDateTime(start);
+    const e = formatDateTime(end);
     return s === e ? s : `${s} – ${e}`;
   }
 
@@ -91,7 +94,30 @@ export function TherapistLeaveManagement() {
         <p className="text-sm text-muted-foreground">Submit and manage your leave requests</p>
       </div>
 
-      <LeaveRequestForm onSuccess={() => void load()} />
+      {conflictNotice && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <p>{conflictNotice}</p>
+        </div>
+      )}
+
+      <BookingsNeedsAttentionPanel />
+
+      <LeaveRequestForm
+        onSuccess={({ affectedCount }) => {
+          void load();
+          if (affectedCount > 0) {
+            setConflictNotice(
+              `Your leave overlaps ${affectedCount} active appointment(s). Postpone or cancel each booking below before your leave starts.`,
+            );
+          } else {
+            setConflictNotice(null);
+          }
+        }}
+      />
 
       {error && (
         <div
@@ -123,7 +149,10 @@ export function TherapistLeaveManagement() {
                 >
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium">{formatDateRange(leave.startDate, leave.endDate)}</p>
+                      <p className="font-medium">
+                        {formatDateRange(leave.startDateTime, leave.endDateTime)}
+                        {leave.isFullDay ? ' · Full day' : ''}
+                      </p>
                       <LeaveStatusBadge status={leave.status} />
                     </div>
                     <p className="mt-1 text-sm text-slate-700">{leave.reason}</p>

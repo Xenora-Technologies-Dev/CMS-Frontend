@@ -1,9 +1,11 @@
 'use client';
 
+import { AdminLeaveEntryForm } from '@/components/leave/admin-leave-entry-form';
+import { BookingsNeedsAttentionPanel } from '@/components/booking/bookings-needs-attention-panel';
 import { LeaveStatusBadge } from '@/components/leave/leave-status-badge';
 import { PaginationControls } from '@/components/shared/pagination-controls';
 import { ProgressDialog } from '@/components/shared/progress-dialog';
-import type { PaginatedMeta } from '@/lib/types';
+import type { PaginatedMeta, Therapist } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -30,8 +32,9 @@ import {
   type LeaveRequest,
   type LeaveRequestStatus,
 } from '@/lib/leave-api';
+import { listTherapists } from '@/lib/therapist-api';
 import { getFriendlyErrorMessage } from '@/lib/error-utils';
-import { getTherapistName } from '@/lib/utils';
+import { formatDateTime, getTherapistName } from '@/lib/utils';
 import { Check, Loader2, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useSocketEvent } from '@/components/providers/socket-provider';
@@ -40,6 +43,7 @@ import { SocketEvents } from '@/lib/socket-events';
 export function AdminLeaveManagement() {
   const { progress, run } = useProgressAction();
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
+  const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [statusFilter, setStatusFilter] = useState<LeaveRequestStatus | 'ALL'>('PENDING');
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState<PaginatedMeta>({
@@ -77,18 +81,32 @@ export function AdminLeaveManagement() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    void listTherapists({ limit: 100, isActive: true }).then((result) => {
+      setTherapists(result.data);
+    });
+  }, []);
+
   useSocketEvent<LeaveRequest>(SocketEvents.LEAVE_UPDATED, () => {
     void load();
   });
 
-  async function handleApprove(leave: LeaveRequest) {
+  useSocketEvent(SocketEvents.LEAVE_CONFLICT, () => {
+    void load();
+  });
+
+  async function handleApproveClick(leave: LeaveRequest) {
     setProcessingId(leave.id);
     setError(null);
     try {
-      await run('Approving leave…', async () => {
-        await approveLeaveRequest(leave.id);
-        await load();
-      }, `Processing request for ${getTherapistName(leave.therapist)}`);
+      await run(
+        'Approving leave…',
+        async () => {
+          await approveLeaveRequest(leave.id);
+          await load();
+        },
+        `Processing request for ${getTherapistName(leave.therapist)}`,
+      );
     } catch (err) {
       setError(getFriendlyErrorMessage(err, 'Failed to approve leave request'));
     } finally {
@@ -114,9 +132,9 @@ export function AdminLeaveManagement() {
     }
   }
 
-  function formatDateRange(start: string, end: string) {
-    const s = new Date(start).toLocaleDateString('en-GB');
-    const e = new Date(end).toLocaleDateString('en-GB');
+  function formatLeaveRange(start: string, end: string) {
+    const s = formatDateTime(start);
+    const e = formatDateTime(end);
     return s === e ? s : `${s} – ${e}`;
   }
 
@@ -130,8 +148,14 @@ export function AdminLeaveManagement() {
 
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Leave Management</h1>
-        <p className="text-sm text-muted-foreground">Review and approve therapist leave requests</p>
+        <p className="text-sm text-muted-foreground">
+          Review pending requests, enter leave, and resolve booking conflicts
+        </p>
       </div>
+
+      <AdminLeaveEntryForm therapists={therapists} onSuccess={() => void load()} />
+
+      <BookingsNeedsAttentionPanel />
 
       <div className="flex flex-wrap items-center gap-3">
         <Select
@@ -193,7 +217,8 @@ export function AdminLeaveManagement() {
                         <LeaveStatusBadge status={leave.status} />
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {formatDateRange(leave.startDate, leave.endDate)}
+                        {formatLeaveRange(leave.startDateTime, leave.endDateTime)}
+                        {leave.isFullDay ? ' · Full day' : ''}
                       </p>
                       <p className="mt-1 text-sm text-slate-700">{leave.reason}</p>
                       {leave.adminNotes && (
@@ -207,7 +232,7 @@ export function AdminLeaveManagement() {
                         <Button
                           size="sm"
                           className="w-full sm:w-auto"
-                          onClick={() => void handleApprove(leave)}
+                          onClick={() => void handleApproveClick(leave)}
                           disabled={isProcessing || progress.open}
                         >
                           {isProcessing ? (

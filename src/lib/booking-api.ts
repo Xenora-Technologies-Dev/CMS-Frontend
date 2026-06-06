@@ -37,6 +37,8 @@ export async function listBookings(params: ListBookingsParams = {}): Promise<Pag
   if (params.limit) searchParams.set('limit', String(params.limit));
   if (params.patientId) searchParams.set('patientId', params.patientId);
   if (params.therapistId) searchParams.set('therapistId', params.therapistId);
+  if (params.doctorId) searchParams.set('doctorId', params.doctorId);
+  if (params.bookingType) searchParams.set('bookingType', params.bookingType);
   if (params.roomId) searchParams.set('roomId', params.roomId);
   if (params.therapyId) searchParams.set('therapyId', params.therapyId);
   if (params.status) searchParams.set('status', params.status);
@@ -44,14 +46,35 @@ export async function listBookings(params: ListBookingsParams = {}): Promise<Pag
   if (params.quickFilter) searchParams.set('quickFilter', params.quickFilter);
   if (params.patientName) searchParams.set('patientName', params.patientName);
   if (params.patientPhone) searchParams.set('patientPhone', params.patientPhone);
+  if (params.therapistName) searchParams.set('therapistName', params.therapistName);
+  if (params.therapyName) searchParams.set('therapyName', params.therapyName);
   if (params.dateFrom) searchParams.set('dateFrom', params.dateFrom);
   if (params.dateTo) searchParams.set('dateTo', params.dateTo);
   if (params.sort) searchParams.set('sort', params.sort);
+  if (params.recentOnly) searchParams.set('recentOnly', 'true');
   if (params.excludeStatuses?.length) {
     searchParams.set('excludeStatuses', params.excludeStatuses.join(','));
   }
   const qs = searchParams.toString();
   return apiRequestPaginated<Booking>(`/bookings${qs ? `?${qs}` : ''}`);
+}
+
+export async function listRecentBookings(
+  params: ListBookingsParams = {},
+): Promise<PaginatedResponse<Booking>> {
+  const searchParams = new URLSearchParams();
+  if (params.page) searchParams.set('page', String(params.page));
+  if (params.limit) searchParams.set('limit', String(params.limit));
+  if (params.patientName) searchParams.set('patientName', params.patientName);
+  if (params.patientPhone) searchParams.set('patientPhone', params.patientPhone);
+  if (params.therapistName) searchParams.set('therapistName', params.therapistName);
+  if (params.therapyName) searchParams.set('therapyName', params.therapyName);
+  if (params.therapistId) searchParams.set('therapistId', params.therapistId);
+  if (params.status) searchParams.set('status', params.status);
+  if (params.dateFrom) searchParams.set('dateFrom', params.dateFrom);
+  if (params.dateTo) searchParams.set('dateTo', params.dateTo);
+  const qs = searchParams.toString();
+  return apiRequestPaginated<Booking>(`/bookings/recent${qs ? `?${qs}` : ''}`);
 }
 
 export async function fetchBookingAudits(id: string): Promise<AppointmentAudit[]> {
@@ -73,15 +96,61 @@ export async function updateBookingNotes(
   });
 }
 
-export async function fetchBookingsForDate(date: Date, limit = 100): Promise<Booking[]> {
-  const result = await apiRequestPaginated<Booking>(
-    `/bookings?dateFrom=${encodeURIComponent(startOfDay(date).toISOString())}&dateTo=${encodeURIComponent(endOfDay(date).toISOString())}&limit=${limit}&excludeStatuses=RESCHEDULED,CANCELLED,NO_SHOW`,
-  );
+export async function fetchBookingsForDate(
+  date: Date,
+  limit = 100,
+  options?: { bookingType?: 'THERAPY' | 'CONSULTATION'; doctorId?: string },
+): Promise<Booking[]> {
+  const params = new URLSearchParams({
+    dateFrom: startOfDay(date).toISOString(),
+    dateTo: endOfDay(date).toISOString(),
+    limit: String(limit),
+    excludeStatuses: 'RESCHEDULED,CANCELLED,NO_SHOW',
+  });
+  if (options?.bookingType) params.set('bookingType', options.bookingType);
+  if (options?.doctorId) params.set('doctorId', options.doctorId);
+  const result = await apiRequestPaginated<Booking>(`/bookings?${params.toString()}`);
   return result.data;
 }
 
 export async function fetchBooking(id: string): Promise<{ booking: Booking }> {
   return apiRequest<{ booking: Booking }>(`/bookings/${id}`);
+}
+
+export interface BookingComment {
+  id: string;
+  bookingId: string;
+  content: string;
+  createdAt: string;
+  author: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    role: 'ADMIN' | 'THERAPIST' | 'DOCTOR';
+  };
+}
+
+export async function listBookingComments(
+  bookingId: string,
+): Promise<{ comments: BookingComment[] }> {
+  return apiRequest<{ comments: BookingComment[] }>(`/bookings/${bookingId}/comments`);
+}
+
+export async function createBookingComment(
+  bookingId: string,
+  content: string,
+): Promise<{ comment: BookingComment }> {
+  return apiRequest<{ comment: BookingComment }>(`/bookings/${bookingId}/comments`, {
+    method: 'POST',
+    body: { content },
+  });
+}
+
+export async function fetchBookingsNeedingAttention(therapistId?: string) {
+  const qs = therapistId ? `?therapistId=${therapistId}` : '';
+  return apiRequest<{ bookings: import('./leave-api').BookingNeedingAttention[] }>(
+    `/bookings/needs-attention${qs}`,
+  );
 }
 
 export async function createBooking(payload: CreateBookingPayload): Promise<{ booking: Booking }> {

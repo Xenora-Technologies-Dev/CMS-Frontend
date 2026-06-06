@@ -10,18 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { QuickFilter, StatusGroupFilter, Therapist, Therapy } from '@/lib/types';
-import { cn } from '@/lib/utils';
+import type { StatusGroupFilter, Therapist, Therapy } from '@/lib/types';
 import { RefreshCw, X } from 'lucide-react';
-
-const QUICK_FILTERS: { value: QuickFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'today', label: 'Today' },
-  { value: 'tomorrow', label: 'Tomorrow' },
-  { value: 'upcoming', label: 'Upcoming' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
-];
+import { cn } from '@/lib/utils';
 
 const STATUS_GROUPS: { value: StatusGroupFilter | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All Statuses' },
@@ -39,7 +30,6 @@ export interface AppointmentListFiltersState {
   statusGroup: StatusGroupFilter | 'ALL';
   dateFrom: string;
   dateTo: string;
-  quickFilter: QuickFilter;
 }
 
 interface AppointmentListFiltersProps {
@@ -78,24 +68,6 @@ export function AppointmentListFilters({
             Clear
           </Button>
         </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {QUICK_FILTERS.map((item) => (
-          <button
-            key={item.value}
-            type="button"
-            onClick={() => patch({ quickFilter: item.value })}
-            className={cn(
-              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-              filters.quickFilter === item.value
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -206,7 +178,6 @@ export const DEFAULT_APPOINTMENT_FILTERS: AppointmentListFiltersState = {
   statusGroup: 'ALL',
   dateFrom: '',
   dateTo: '',
-  quickFilter: 'all',
 };
 
 /** Statuses hidden from default appointment list (superseded / inactive bookings). */
