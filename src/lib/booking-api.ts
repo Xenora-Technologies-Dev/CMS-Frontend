@@ -230,6 +230,13 @@ export interface PatientSearchResult {
 
 const PATIENT_SEARCH_PAGE_SIZE = 50;
 
+/** Minimum characters before searching (1 for numeric phone/MRN queries). */
+export function getPatientSearchMinLength(query: string): number {
+  const trimmed = query.trim();
+  if (/^\d+$/.test(trimmed)) return 1;
+  return 2;
+}
+
 export async function searchPatients(
   query: string,
   page = 1,

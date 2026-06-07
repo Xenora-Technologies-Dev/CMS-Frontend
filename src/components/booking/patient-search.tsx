@@ -1,6 +1,7 @@
 'use client';
 
 import type { PatientSearchResult } from '@/lib/booking-api';
+import { getPatientSearchMinLength } from '@/lib/booking-api';
 import type { Patient } from '@/lib/types';
 import { cn, getPatientName } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,6 @@ import { getPatient } from '@/lib/patient-api';
 import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const MIN_SEARCH_LENGTH = 2;
 const SEARCH_DEBOUNCE_MS = 300;
 
 interface PatientSearchProps {
@@ -32,6 +32,9 @@ export function PatientSearch({ value, onChange, onSearch, disabled, error }: Pa
   const [page, setPage] = useState(1);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const searchRequestIdRef = useRef(0);
+
+  const minSearchLength = getPatientSearchMinLength(query);
 
   useEffect(() => {
     if (!value) {
@@ -53,6 +56,7 @@ export function PatientSearch({ value, onChange, onSearch, disabled, error }: Pa
           lastName: patient.lastName,
           medicalRecordNo: patient.medicalRecordNo,
           phone: patient.phone,
+          email: patient.email,
         });
       } catch {
         if (!cancelled) setSelectedPatient(null);
@@ -69,25 +73,30 @@ export function PatientSearch({ value, onChange, onSearch, disabled, error }: Pa
   const runSearch = useCallback(
     async (searchQuery: string, searchPage: number, append: boolean) => {
       const trimmed = searchQuery.trim();
-      if (trimmed.length > 0 && trimmed.length < MIN_SEARCH_LENGTH) {
+      const requiredLength = getPatientSearchMinLength(trimmed);
+      if (trimmed.length > 0 && trimmed.length < requiredLength) {
         setResults([]);
         setHasMore(false);
         setTotal(0);
         return;
       }
 
+      const requestId = ++searchRequestIdRef.current;
       if (append) setLoadingMore(true);
       else setLoading(true);
 
       try {
         const result = await onSearch(trimmed, searchPage);
+        if (requestId !== searchRequestIdRef.current) return;
         setResults((prev) => (append ? [...prev, ...result.patients] : result.patients));
         setHasMore(result.hasMore);
         setTotal(result.total);
         setPage(searchPage);
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        if (requestId === searchRequestIdRef.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     },
     [onSearch],
@@ -120,7 +129,7 @@ export function PatientSearch({ value, onChange, onSearch, disabled, error }: Pa
   }
 
   const showMinCharsHint =
-    open && query.trim().length > 0 && query.trim().length < MIN_SEARCH_LENGTH;
+    open && query.trim().length > 0 && query.trim().length < minSearchLength;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -150,17 +159,21 @@ export function PatientSearch({ value, onChange, onSearch, disabled, error }: Pa
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Name, MRN, phone, Emirates ID…"
+            placeholder="Name, MRN, phone, email, Emirates ID…"
             autoFocus
           />
           <p className="mt-1.5 text-[11px] text-muted-foreground">
-            Type at least {MIN_SEARCH_LENGTH} characters to search {total > 0 ? `(${total.toLocaleString()} matches)` : ''}
+            {showMinCharsHint
+              ? `Type at least ${minSearchLength} character${minSearchLength === 1 ? '' : 's'} to search`
+              : total > 0
+                ? `${total.toLocaleString()} match${total === 1 ? '' : 'es'}`
+                : 'Search across all patients'}
           </p>
         </div>
         <div ref={listRef} className="max-h-60 overflow-y-auto p-1">
           {showMinCharsHint ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              Enter {MIN_SEARCH_LENGTH}+ characters to search patients
+              Enter {minSearchLength}+ character{minSearchLength === 1 ? '' : 's'} to search patients
             </p>
           ) : loading ? (
             <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
@@ -191,6 +204,7 @@ export function PatientSearch({ value, onChange, onSearch, disabled, error }: Pa
                     <span className="block text-xs text-muted-foreground">
                       {patient.medicalRecordNo}
                       {patient.phone ? ` · ${patient.phone}` : ''}
+                      {patient.email ? ` · ${patient.email}` : ''}
                     </span>
                   </span>
                 </button>

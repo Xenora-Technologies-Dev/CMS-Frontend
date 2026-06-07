@@ -24,7 +24,7 @@ import {
   getTherapistColor,
   getTherapistName,
 } from '@/lib/utils';
-import { Check, Search, X } from 'lucide-react';
+import { Check, Loader2, Search, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 const PREVIEW_LIMIT = 5;
@@ -49,13 +49,18 @@ function BookingRow({
   onComplete,
   onDismiss,
   onClick,
+  completingBookingId,
+  actionBusy,
 }: {
   booking: Booking;
   showPendingActions?: boolean;
   onComplete?: (booking: Booking) => void;
   onDismiss?: (booking: Booking) => void;
   onClick?: (booking: Booking) => void;
+  completingBookingId?: string | null;
+  actionBusy?: boolean;
 }) {
+  const isCompleting = completingBookingId === booking.id;
   return (
     <div
       className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
@@ -96,9 +101,14 @@ function BookingRow({
               variant="outline"
               className="h-8 w-8 text-emerald-600 hover:bg-emerald-50"
               aria-label="Mark completed"
+              disabled={actionBusy}
               onClick={() => onComplete?.(booking)}
             >
-              <Check className="h-4 w-4" />
+              {isCompleting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4" />
+              )}
             </Button>
             <Button
               type="button"
@@ -106,6 +116,7 @@ function BookingRow({
               variant="outline"
               className="h-8 w-8 text-destructive hover:bg-destructive/5"
               aria-label="Postpone or cancel"
+              disabled={actionBusy}
               onClick={() => onDismiss?.(booking)}
             >
               <X className="h-4 w-4" />
@@ -124,6 +135,8 @@ function TypeSection({
   onComplete,
   onDismiss,
   onClick,
+  completingBookingId,
+  actionBusy,
 }: {
   label: string;
   bookings: Booking[];
@@ -131,6 +144,8 @@ function TypeSection({
   onComplete?: (booking: Booking) => void;
   onDismiss?: (booking: Booking) => void;
   onClick?: (booking: Booking) => void;
+  completingBookingId?: string | null;
+  actionBusy?: boolean;
 }) {
   if (bookings.length === 0) {
     return (
@@ -157,6 +172,8 @@ function TypeSection({
             onComplete={onComplete}
             onDismiss={onDismiss}
             onClick={onClick}
+            completingBookingId={completingBookingId}
+            actionBusy={actionBusy}
           />
         ))}
       </div>
@@ -186,7 +203,7 @@ export function DashboardBookingList({
   const [cancelOpen, setCancelOpen] = useState(false);
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [actionTarget, setActionTarget] = useState<Booking | null>(null);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [completingBookingId, setCompletingBookingId] = useState<string | null>(null);
 
   const allBookings = useMemo(
     () => [...therapyBookings, ...consultationBookings],
@@ -221,7 +238,8 @@ export function DashboardBookingList({
   }
 
   async function handleComplete(booking: Booking) {
-    setActionLoading(true);
+    if (completingBookingId) return;
+    setCompletingBookingId(booking.id);
     try {
       await completeBooking(booking.id);
       showBookingAction({ action: 'complete', booking });
@@ -233,7 +251,7 @@ export function DashboardBookingList({
         error: err instanceof Error ? err.message : 'Failed to complete booking',
       });
     } finally {
-      setActionLoading(false);
+      setCompletingBookingId(null);
     }
   }
 
@@ -274,6 +292,8 @@ export function DashboardBookingList({
           onComplete={handleComplete}
           onDismiss={openDismissDialog}
           onClick={openDetail}
+          completingBookingId={completingBookingId}
+          actionBusy={Boolean(completingBookingId)}
         />
         <TypeSection
           label="Consultation Booking"
@@ -282,6 +302,8 @@ export function DashboardBookingList({
           onComplete={handleComplete}
           onDismiss={openDismissDialog}
           onClick={openDetail}
+          completingBookingId={completingBookingId}
+          actionBusy={Boolean(completingBookingId)}
         />
       </div>
 
@@ -310,6 +332,8 @@ export function DashboardBookingList({
               onComplete={handleComplete}
               onDismiss={openDismissDialog}
               onClick={openDetail}
+              completingBookingId={completingBookingId}
+              actionBusy={Boolean(completingBookingId)}
             />
             <TypeSection
               label="Consultation Booking"
@@ -318,6 +342,8 @@ export function DashboardBookingList({
               onComplete={handleComplete}
               onDismiss={openDismissDialog}
               onClick={openDetail}
+              completingBookingId={completingBookingId}
+              actionBusy={Boolean(completingBookingId)}
             />
           </div>
         </DialogContent>
@@ -333,7 +359,7 @@ export function DashboardBookingList({
           </p>
           <DialogFooter className="flex-col gap-2 sm:flex-col">
             <Button
-              disabled={actionLoading}
+              disabled={Boolean(completingBookingId)}
               onClick={() => {
                 if (!actionTarget) return;
                 setActionDialogOpen(false);
@@ -345,7 +371,7 @@ export function DashboardBookingList({
             </Button>
             <Button
               variant="destructive"
-              disabled={actionLoading}
+              disabled={Boolean(completingBookingId)}
               onClick={() => {
                 if (!actionTarget) return;
                 setActionDialogOpen(false);

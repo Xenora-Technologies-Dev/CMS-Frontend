@@ -37,7 +37,7 @@ import { useClinicOptional } from '@/components/providers/clinic-provider';
 import { formatDateTime, formatUserName } from '@/lib/appointment-list-utils';
 import { fetchBookingAudits, fetchPatientBookings } from '@/lib/booking-api';
 import type { AppointmentAudit, Booking } from '@/lib/types';
-import { ExternalLink, FileText, History, RotateCcw, CheckCircle2 } from 'lucide-react';
+import { ExternalLink, FileText, History, Loader2, RotateCcw, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
@@ -479,7 +479,7 @@ interface BookingDetailDialogProps {
   onReschedule?: () => void;
   onCancel?: () => void;
   onRestore?: () => void;
-  onComplete?: () => void;
+  onComplete?: () => void | Promise<void>;
   /** When set, hides admin-only actions and uses read-only staff view. */
   viewerRole?: 'admin' | 'therapist' | 'doctor';
   /** Called after a comment is posted on the booking. */
@@ -499,9 +499,14 @@ export function BookingDetailDialog({
   onCommentPosted,
 }: BookingDetailDialogProps) {
   const [slipOpen, setSlipOpen] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [audits, setAudits] = useState<AppointmentAudit[]>([]);
   const [patientHistory, setPatientHistory] = useState<Booking[]>([]);
   const clinicContext = useClinicOptional();
+
+  useEffect(() => {
+    if (!open) setCompleting(false);
+  }, [open]);
 
   useEffect(() => {
     if (!open || !booking || viewerRole === 'therapist' || viewerRole === 'doctor') {
@@ -780,9 +785,28 @@ export function BookingDetailDialog({
               </Button>
             )}
             {canComplete && (
-              <Button variant="default" className="w-full" onClick={onComplete}>
-                <CheckCircle2 className="mr-2 h-4 w-4" />
-                Mark Completed
+              <Button
+                variant="default"
+                className="w-full"
+                disabled={completing}
+                onClick={() => {
+                  if (!onComplete) return;
+                  void (async () => {
+                    setCompleting(true);
+                    try {
+                      await onComplete();
+                    } finally {
+                      setCompleting(false);
+                    }
+                  })();
+                }}
+              >
+                {completing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                )}
+                {completing ? 'Completing…' : 'Mark Completed'}
               </Button>
             )}
           </DialogFooter>

@@ -13,7 +13,7 @@ import { listRooms } from '@/lib/room-api';
 import { listTherapists } from '@/lib/therapist-api';
 import type { Booking, Room, Therapist } from '@/lib/types';
 import { formatDateTime, getPatientName, getTherapistName } from '@/lib/utils';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const POLL_INTERVAL_MS = 30 * 60 * 1000;
@@ -37,6 +37,7 @@ export function BookingsNeedsAttentionPanel({
   const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelBookingId, setCancelBookingId] = useState<string | null>(null);
+  const [postponingBookingId, setPostponingBookingId] = useState<string | null>(null);
   const hasLoadedOnce = useRef(false);
 
   const load = useCallback(async (options?: { background?: boolean }) => {
@@ -73,8 +74,14 @@ export function BookingsNeedsAttentionPanel({
   }, [load]);
 
   async function openReschedule(bookingId: string) {
-    const { booking } = await fetchBooking(bookingId);
-    setRescheduleBooking(booking);
+    if (postponingBookingId) return;
+    setPostponingBookingId(bookingId);
+    try {
+      const { booking } = await fetchBooking(bookingId);
+      setRescheduleBooking(booking);
+    } finally {
+      setPostponingBookingId(null);
+    }
   }
 
   function handleActionDone() {
@@ -136,12 +143,25 @@ export function BookingsNeedsAttentionPanel({
               <div className="flex shrink-0 gap-2">
                 {canManageBookings ? (
                   <>
-                    <Button size="sm" variant="outline" onClick={() => void openReschedule(booking.id)}>
-                      Postpone
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={postponingBookingId === booking.id}
+                      onClick={() => void openReschedule(booking.id)}
+                    >
+                      {postponingBookingId === booking.id ? (
+                        <>
+                          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                          Loading…
+                        </>
+                      ) : (
+                        'Postpone'
+                      )}
                     </Button>
                     <Button
                       size="sm"
                       variant="destructive"
+                      disabled={Boolean(postponingBookingId)}
                       onClick={() => {
                         setCancelBookingId(booking.id);
                         setCancelOpen(true);

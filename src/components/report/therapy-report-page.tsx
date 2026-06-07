@@ -1,7 +1,8 @@
 'use client';
 
 import { ReportDateRangePanel, getMonthRange, toReportIsoRange } from '@/components/report/report-date-range-panel';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ReportLayout } from '@/components/report/report-layout';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   downloadTherapyReportCsv,
   downloadTherapyReportPdf,
@@ -63,7 +64,7 @@ export function TherapyReportPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Therapy Report</h1>
         <p className="text-sm text-muted-foreground">
-          Therapy booking statistics by therapist for a date range.
+          Therapy booking statistics and completed session details for a date range.
         </p>
       </div>
 
@@ -91,65 +92,79 @@ export function TherapyReportPage() {
       )}
 
       {report && (
-        <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              ['Total booked', report.summary.totalBooked],
-              ['Completed', report.summary.completed],
-              ['Scheduled', report.summary.scheduled],
-              ['Pending confirmation', report.summary.pendingConfirmation],
-              ['Cancelled', report.summary.cancelled],
-              ['No show', report.summary.noShow],
-            ].map(([label, value]) => (
-              <Card key={label}>
-                <CardContent className="pt-6">
-                  <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
-                  <p className="mt-1 text-2xl font-bold">{value}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+        <ReportLayout meta={report.meta}>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Summary
+              </h3>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {[
+                  ['Total booked', report.summary.totalBooked],
+                  ['Completed', report.summary.completed],
+                  ['Scheduled', report.summary.scheduled],
+                  ['Pending confirmation', report.summary.pendingConfirmation],
+                  ['Cancelled', report.summary.cancelled],
+                  ['No show', report.summary.noShow],
+                ].map(([label, value]) => (
+                  <Card key={label}>
+                    <CardContent className="pt-4">
+                      <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
+                      <p className="mt-1 text-2xl font-bold">{value}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">By therapist</CardTitle>
-            </CardHeader>
-            <CardContent className="overflow-x-auto p-0">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/40 text-left">
-                    <th className="px-4 py-3 font-medium">Therapist</th>
-                    <th className="px-4 py-3 font-medium">Total</th>
-                    <th className="px-4 py-3 font-medium">Completed</th>
-                    <th className="px-4 py-3 font-medium">Scheduled</th>
-                    <th className="px-4 py-3 font-medium">Pending</th>
-                    <th className="px-4 py-3 font-medium">Cancelled</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.therapists.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                        No therapy bookings in this range
-                      </td>
-                    </tr>
-                  ) : (
-                    report.therapists.map((row) => (
-                      <tr key={row.therapistName} className="border-b last:border-0">
-                        <td className="px-4 py-3 font-medium">{row.therapistName}</td>
-                        <td className="px-4 py-3">{row.total}</td>
-                        <td className="px-4 py-3">{row.completed}</td>
-                        <td className="px-4 py-3">{row.scheduled}</td>
-                        <td className="px-4 py-3">{row.pendingConfirmation}</td>
-                        <td className="px-4 py-3">{row.cancelled}</td>
-                      </tr>
-                    ))
+            {report.therapists.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No therapy bookings in this range
+              </p>
+            ) : (
+              report.therapists.map((therapist) => (
+                <div key={therapist.therapistName} className="space-y-4 border-t pt-6 first:border-t-0 first:pt-0">
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">{therapist.therapistName}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Total {therapist.total} · Completed {therapist.completed} · Scheduled{' '}
+                      {therapist.scheduled} · Pending {therapist.pendingConfirmation} · Cancelled{' '}
+                      {therapist.cancelled}
+                    </p>
+                  </div>
+
+                  {therapist.completedBookings.length > 0 && (
+                    <div className="overflow-x-auto rounded-md border">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/40 text-left">
+                            <th className="px-4 py-3 font-medium">Date</th>
+                            <th className="px-4 py-3 font-medium">Time</th>
+                            <th className="px-4 py-3 font-medium">Patient</th>
+                            <th className="px-4 py-3 font-medium">Therapy</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {therapist.completedBookings.map((booking, index) => (
+                            <tr
+                              key={`${booking.patientName}-${booking.time}-${index}`}
+                              className="border-b last:border-0"
+                            >
+                              <td className="px-4 py-3">{booking.date}</td>
+                              <td className="px-4 py-3 whitespace-nowrap">{booking.time}</td>
+                              <td className="px-4 py-3 font-medium">{booking.patientName}</td>
+                              <td className="px-4 py-3">{booking.therapyName}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
-        </div>
+                </div>
+              ))
+            )}
+          </div>
+        </ReportLayout>
       )}
     </div>
   );

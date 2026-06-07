@@ -74,7 +74,7 @@ import {
   toTimeInputValue,
 } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -131,7 +131,9 @@ export function BookingFormModal({
     clinicContext?.clinic,
   );
   const [step, setStep] = useState<'form' | 'summary'>('form');
+  const [reviewing, setReviewing] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const actionBusy = reviewing || progress.open;
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [availability, setAvailability] = useState<
     import('@/lib/types').TherapistAvailability[]
@@ -318,6 +320,7 @@ export function BookingFormModal({
       setSelectedPatient(null);
     }
     setStep('form');
+    setReviewing(false);
     setSubmitError(null);
     setAvailability([]);
     setPreviewBookings(dayBookingsRef.current);
@@ -616,6 +619,7 @@ export function BookingFormModal({
   }
 
   async function handleConfirm() {
+    if (progress.open) return;
     setSubmitError(null);
 
     const freshBookings = scheduleReady ? await loadSlotSchedule() : previewBookings;
@@ -649,25 +653,35 @@ export function BookingFormModal({
   }
 
   function handleReviewSubmit() {
+    if (actionBusy) return;
     setSubmitError(null);
     void form.handleSubmit(() => {
       void (async () => {
-        let freshBookings = previewBookings;
-        if (scheduleReady) {
-          freshBookings = await loadSlotSchedule();
-          const reviewIssues = validateBookingSlot(
-            { ...slotPreviewInput, dayBookings: freshBookings },
-            validationOptions,
-          );
-          if (hasBlockingSlotIssues(reviewIssues, validationOptions)) {
-            setSubmitError('This slot is no longer available. Please choose another.');
+        setReviewing(true);
+        try {
+          let freshBookings = previewBookings;
+          if (scheduleReady) {
+            freshBookings = await loadSlotSchedule();
+            const reviewIssues = validateBookingSlot(
+              { ...slotPreviewInput, dayBookings: freshBookings },
+              validationOptions,
+            );
+            if (hasBlockingSlotIssues(reviewIssues, validationOptions)) {
+              setSubmitError('This slot is no longer available. Please choose another.');
+              return;
+            }
+          } else if (hasBlockingIssues) {
+            setSubmitError('Resolve availability issues before continuing');
             return;
           }
-        } else if (hasBlockingIssues) {
-          setSubmitError('Resolve availability issues before continuing');
-          return;
+          setStep('summary');
+        } catch (err) {
+          setSubmitError(
+            getFriendlyErrorMessage(err, 'Failed to verify slot availability'),
+          );
+        } finally {
+          setReviewing(false);
         }
-        setStep('summary');
       })();
     })();
   }
@@ -687,15 +701,14 @@ export function BookingFormModal({
         ? 'Create Booking'
         : 'Edit Booking';
 
+  function handleDialogOpenChange(next: boolean) {
+    if (!next && actionBusy) return;
+    onOpenChange(next);
+  }
+
   return (
     <>
-      <ProgressDialog
-        open={progress.open}
-        title={progress.title}
-        description={progress.description}
-      />
-
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -721,16 +734,31 @@ export function BookingFormModal({
             />
             {submitError && <p className="text-sm text-destructive">{submitError}</p>}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setStep('form')}>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={actionBusy}
+                onClick={() => setStep('form')}
+              >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back
               </Button>
-              <Button type="button" onClick={() => void handleConfirm()} disabled={progress.open}>
-                {progress.open
-                  ? 'Saving…'
-                  : mode === 'create'
-                    ? 'Confirm & Create'
-                    : 'Confirm & Save'}
+              <Button
+                type="button"
+                onClick={() => void handleConfirm()}
+                disabled={actionBusy}
+                aria-busy={progress.open}
+              >
+                {progress.open ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {mode === 'create' ? 'Creating…' : 'Saving…'}
+                  </>
+                ) : mode === 'create' ? (
+                  'Confirm & Create'
+                ) : (
+                  'Confirm & Save'
+                )}
               </Button>
             </DialogFooter>
           </div>
@@ -945,11 +973,29 @@ export function BookingFormModal({
               {submitError && <p className="text-sm text-destructive">{submitError}</p>}
 
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={actionBusy}
+                  onClick={() => onOpenChange(false)}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={!isFormValid}>
-                  {mode === 'create' ? 'Review Booking' : 'Review Changes'}
+                <Button
+                  type="submit"
+                  disabled={!isFormValid || actionBusy}
+                  aria-busy={reviewing}
+                >
+                  {reviewing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Checking availability…
+                    </>
+                  ) : mode === 'create' ? (
+                    'Review Booking'
+                  ) : (
+                    'Review Changes'
+                  )}
                 </Button>
               </DialogFooter>
             </form>
@@ -965,6 +1011,12 @@ export function BookingFormModal({
           setSelectedPatient(patient);
           form.setValue('patientId', patient.id, { shouldValidate: true });
         }}
+      />
+
+      <ProgressDialog
+        open={progress.open}
+        title={progress.title}
+        description={progress.description}
       />
     </>
   );

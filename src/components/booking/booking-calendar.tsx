@@ -231,7 +231,6 @@ export function BookingCalendar({
 
   async function handleComplete() {
     if (!selectedBooking) return;
-    if (!confirm('Mark this appointment as completed?')) return;
     await completeBooking(selectedBooking.id);
     setDetailOpen(false);
     await loadData({ background: true });
@@ -423,7 +422,7 @@ export function BookingCalendar({
           setDetailOpen(false);
           setCancelOpen(true);
         }}
-        onComplete={lockedTherapistId ? undefined : () => void handleComplete()}
+        onComplete={lockedTherapistId ? undefined : handleComplete}
         viewerRole={lockedTherapistId ? 'therapist' : 'admin'}
       />
 

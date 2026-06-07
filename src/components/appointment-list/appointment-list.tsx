@@ -55,6 +55,7 @@ export function AppointmentList() {
   const [formOpen, setFormOpen] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [processingBookingId, setProcessingBookingId] = useState<string | null>(null);
 
   const debouncedPatientName = useDebouncedValue(filters.patientName);
   const debouncedPatientPhone = useDebouncedValue(filters.patientPhone);
@@ -177,14 +178,26 @@ export function AppointmentList() {
 
   async function handleRestore(booking: Booking) {
     if (!confirm('Restore this cancelled appointment?')) return;
-    await restoreBooking(booking.id);
-    await loadBookings();
+    if (processingBookingId) return;
+    setProcessingBookingId(booking.id);
+    try {
+      await restoreBooking(booking.id);
+      await loadBookings();
+    } finally {
+      setProcessingBookingId(null);
+    }
   }
 
   async function handleComplete(booking: Booking) {
     if (!confirm('Mark this appointment as completed?')) return;
-    await completeBooking(booking.id);
-    await loadBookings();
+    if (processingBookingId) return;
+    setProcessingBookingId(booking.id);
+    try {
+      await completeBooking(booking.id);
+      await loadBookings();
+    } finally {
+      setProcessingBookingId(null);
+    }
   }
 
   return (
@@ -221,6 +234,7 @@ export function AppointmentList() {
             <AppointmentListCard
               key={booking.id}
               booking={booking}
+              processing={processingBookingId === booking.id}
               onView={handleView}
               onEdit={handleEdit}
               onPostpone={handlePostpone}
@@ -267,8 +281,8 @@ export function AppointmentList() {
         }
         onComplete={
           selectedBooking && ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS'].includes(selectedBooking.status)
-            ? () => {
-                void handleComplete(selectedBooking);
+            ? async () => {
+                await handleComplete(selectedBooking);
                 setDetailOpen(false);
               }
             : undefined

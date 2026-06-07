@@ -25,6 +25,7 @@ import {
   Clock,
   DoorOpen,
   Eye,
+  Loader2,
   MoreVertical,
   Pencil,
   Phone,
@@ -37,6 +38,7 @@ import {
 
 interface AppointmentListCardProps {
   booking: Booking;
+  processing?: boolean;
   onView: (booking: Booking) => void;
   onEdit?: (booking: Booking) => void;
   onPostpone?: (booking: Booking) => void;
@@ -47,6 +49,7 @@ interface AppointmentListCardProps {
 
 export function AppointmentListCard({
   booking,
+  processing,
   onView,
   onEdit,
   onPostpone,
@@ -87,8 +90,18 @@ export function AppointmentListCard({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="Actions">
-              <MoreVertical className="h-4 w-4" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              aria-label="Actions"
+              disabled={processing}
+            >
+              {processing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MoreVertical className="h-4 w-4" />
+              )}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">

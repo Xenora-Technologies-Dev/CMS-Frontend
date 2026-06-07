@@ -9,6 +9,31 @@ export interface ReportDateRange {
   dateTo: string;
 }
 
+export interface ReportClinicInfo {
+  name: string;
+  address?: string | null;
+  city?: string | null;
+  emirate?: string | null;
+  phone?: string | null;
+  email?: string | null;
+}
+
+export interface ReportGeneratedBy {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export interface ReportMeta {
+  title: string;
+  clinic: ReportClinicInfo;
+  dateFrom: string;
+  dateTo: string;
+  generatedAt: string;
+  generatedBy: ReportGeneratedBy;
+  accentColor?: string;
+}
+
 export interface TherapyReportSummary {
   totalBooked: number;
   completed: number;
@@ -16,6 +41,13 @@ export interface TherapyReportSummary {
   pendingConfirmation: number;
   scheduled: number;
   noShow: number;
+}
+
+export interface TherapyCompletedBookingRow {
+  date: string;
+  time: string;
+  patientName: string;
+  therapyName: string;
 }
 
 export interface TherapyReportTherapistRow {
@@ -26,11 +58,11 @@ export interface TherapyReportTherapistRow {
   scheduled: number;
   noShow: number;
   total: number;
+  completedBookings: TherapyCompletedBookingRow[];
 }
 
 export interface TherapyReportData {
-  dateFrom: string;
-  dateTo: string;
+  meta: ReportMeta;
   therapists: TherapyReportTherapistRow[];
   summary: TherapyReportSummary;
 }
@@ -39,17 +71,10 @@ export interface ConsultationReportRow {
   date: string;
   time: string;
   patient: string;
-  mrn: string;
-  doctor: string;
-  room: string;
-  mode: string;
-  status: string;
-  remarks: string;
 }
 
 export interface ConsultationReportData {
-  dateFrom: string;
-  dateTo: string;
+  meta: ReportMeta;
   rows: ConsultationReportRow[];
 }
 

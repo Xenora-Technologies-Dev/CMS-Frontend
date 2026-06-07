@@ -198,7 +198,6 @@ export function ConsultationBookingCalendar({
 
   async function handleComplete() {
     if (!selectedBooking) return;
-    if (!confirm('Mark this consultation as completed?')) return;
     await completeBooking(selectedBooking.id);
     setDetailOpen(false);
     await loadData();
@@ -419,7 +418,7 @@ export function ConsultationBookingCalendar({
           setDetailOpen(false);
           setCancelOpen(true);
         }}
-        onComplete={lockedDoctorId ? undefined : () => void handleComplete()}
+        onComplete={lockedDoctorId ? undefined : handleComplete}
         viewerRole={lockedDoctorId ? 'doctor' : 'admin'}
       />
 

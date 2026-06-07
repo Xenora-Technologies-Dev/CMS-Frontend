@@ -79,6 +79,7 @@ export interface Patient {
   lastName: string;
   medicalRecordNo: string;
   phone?: string | null;
+  email?: string | null;
 }
 
 export interface PatientListItem extends Patient {
