@@ -5,13 +5,14 @@ import { formatDateTime, formatTime, getPatientName, getTherapistName } from '@/
 import { CalendarClock, CheckCircle2, X, XCircle } from 'lucide-react';
 import { useEffect } from 'react';
 
-export type BookingActionType = 'cancel' | 'postpone';
+export type BookingActionType = 'cancel' | 'postpone' | 'complete';
 
 export interface BookingActionToastPayload {
   action: BookingActionType;
   booking: Booking;
   previousStartTime?: string;
   cancellationReason?: string;
+  error?: string;
 }
 
 interface BookingActionToastProps {
@@ -20,8 +21,10 @@ interface BookingActionToastProps {
 }
 
 export function BookingActionToast({ payload, onDismiss }: BookingActionToastProps) {
-  const { action, booking, previousStartTime, cancellationReason } = payload;
+  const { action, booking, previousStartTime, cancellationReason, error } = payload;
   const isCancel = action === 'cancel';
+  const isComplete = action === 'complete';
+  const isError = Boolean(error);
 
   useEffect(() => {
     const timer = window.setTimeout(onDismiss, 12_000);
@@ -36,19 +39,31 @@ export function BookingActionToast({ payload, onDismiss }: BookingActionToastPro
     >
       <div
         className={`rounded-xl border bg-white p-4 shadow-lg ring-1 ring-black/5 ${
-          isCancel ? 'border-red-200' : 'border-blue-200'
+          isError ? 'border-red-200' : isCancel ? 'border-red-200' : isComplete ? 'border-emerald-200' : 'border-blue-200'
         }`}
       >
         <div className="flex items-start gap-3">
-          {isCancel ? (
+          {isError || isCancel ? (
             <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+          ) : isComplete ? (
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
           ) : (
             <CalendarClock className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
           )}
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
-              <p className={`font-semibold ${isCancel ? 'text-red-900' : 'text-blue-900'}`}>
-                {isCancel ? 'Appointment Cancelled' : 'Appointment Postponed'}
+              <p
+                className={`font-semibold ${
+                  isError ? 'text-red-900' : isCancel ? 'text-red-900' : isComplete ? 'text-emerald-900' : 'text-blue-900'
+                }`}
+              >
+                {isError
+                  ? 'Action failed'
+                  : isCancel
+                    ? 'Appointment Cancelled'
+                    : isComplete
+                      ? 'Appointment Completed'
+                      : 'Appointment Postponed'}
               </p>
               <button
                 type="button"
@@ -116,10 +131,18 @@ export function BookingActionToast({ payload, onDismiss }: BookingActionToastPro
               )}
             </dl>
 
-            <div className="mt-3 flex items-center gap-1.5 text-xs text-emerald-700">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              {isCancel ? 'Cancellation saved successfully' : 'New schedule saved successfully'}
-            </div>
+            {error ? (
+              <p className="mt-3 text-xs text-destructive">{error}</p>
+            ) : (
+              <div className="mt-3 flex items-center gap-1.5 text-xs text-emerald-700">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {isCancel
+                  ? 'Cancellation saved successfully'
+                  : isComplete
+                    ? 'Booking marked as completed'
+                    : 'New schedule saved successfully'}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -87,6 +87,10 @@ export interface AvailableSlot {
   label: string;
 }
 
+export interface ScheduleSlot extends AvailableSlot {
+  available: boolean;
+}
+
 interface MinuteWindow {
   startMin: number;
   endMin: number;
@@ -251,21 +255,42 @@ export function computeAvailableWindows(input: {
   dayBookings?: Booking[];
   approvedLeaves?: ApprovedLeaveBlock[];
   excludeBookingId?: string;
+  overrideScheduleConstraints?: boolean;
 }): AvailableWindow[] {
   if (!input.date || !input.durationMinutes || !input.therapist) return [];
 
-  const consultStart = input.therapist.consultationStartTime ?? '08:00';
-  const consultEnd = input.therapist.consultationEndTime ?? '18:00';
-  let windows: MinuteWindow[] = [
-    { startMin: timeToMinutes(consultStart), endMin: timeToMinutes(consultEnd) },
-  ];
+  let windows: MinuteWindow[];
 
-  const availabilityWindows = getDayAvailabilityMinuteWindows(
-    input.date,
-    input.availability ?? [],
-  );
-  if (availabilityWindows.length > 0) {
-    windows = intersectMinuteWindows(windows, availabilityWindows);
+  if (input.overrideScheduleConstraints) {
+    windows = [{ startMin: 0, endMin: 24 * 60 }];
+  } else {
+    const hasConsultationHours = Boolean(
+      input.therapist.consultationStartTime && input.therapist.consultationEndTime,
+    );
+    const applyConsultationHours =
+      input.therapist.requiresConsultationHours !== false && hasConsultationHours;
+    const consultWindow: MinuteWindow | null = applyConsultationHours
+      ? {
+          startMin: timeToMinutes(input.therapist.consultationStartTime!),
+          endMin: timeToMinutes(input.therapist.consultationEndTime!),
+        }
+      : null;
+
+    const availabilityWindows = getDayAvailabilityMinuteWindows(
+      input.date,
+      input.availability ?? [],
+    );
+
+    if (availabilityWindows.length > 0) {
+      windows = availabilityWindows;
+      if (consultWindow) {
+        windows = intersectMinuteWindows(windows, [consultWindow]);
+      }
+    } else if (consultWindow) {
+      windows = [consultWindow];
+    } else {
+      windows = [{ startMin: 0, endMin: 24 * 60 }];
+    }
   }
 
   const therapistBookings = getTherapistBookingBlocks(
@@ -287,18 +312,18 @@ export function computeAvailableWindows(input: {
     .map((w) => ({ start: minutesToTime(w.startMin), end: minutesToTime(w.endMin) }));
 }
 
-export function computeAvailableSlots(input: {
+export function computeScheduleSlots(input: {
   windows: AvailableWindow[];
   durationMinutes: number;
   date?: string;
   dayBookings?: Booking[];
   therapistId?: string;
   excludeBookingId?: string;
-}): AvailableSlot[] {
+}): ScheduleSlot[] {
   const { windows, durationMinutes, date, dayBookings, therapistId, excludeBookingId } = input;
   if (!durationMinutes || windows.length === 0) return [];
 
-  const slots: AvailableSlot[] = [];
+  const slots: ScheduleSlot[] = [];
   const now = new Date();
   const isToday = date ? formatDateInput(now) === date : false;
   const nowMin = isToday ? now.getHours() * 60 + now.getMinutes() : 0;
@@ -307,35 +332,41 @@ export function computeAvailableSlots(input: {
     const startMin = timeToMinutes(window.start);
     const endMin = timeToMinutes(window.end);
     for (let t = startMin; t + durationMinutes <= endMin; t += 15) {
-      if (isToday && t < nowMin) continue;
       const startTime = minutesToTime(t);
       const endTime = minutesToTime(t + durationMinutes);
-
-      if (
-        date &&
-        therapistId &&
-        dayBookings &&
+      const isPast = isToday && t < nowMin;
+      const hasConflict =
+        Boolean(date && therapistId && dayBookings) &&
         hasTherapistConflictAtSlot(
-          dayBookings,
-          therapistId,
-          date,
+          dayBookings!,
+          therapistId!,
+          date!,
           startTime,
           durationMinutes,
           excludeBookingId,
-        )
-      ) {
-        continue;
-      }
+        );
 
       slots.push({
         startTime,
         endTime,
         label: `${formatTimeInputValue(startTime)} – ${formatTimeInputValue(endTime)}`,
+        available: !isPast && !hasConflict,
       });
     }
   }
 
   return slots;
+}
+
+export function computeAvailableSlots(input: {
+  windows: AvailableWindow[];
+  durationMinutes: number;
+  date?: string;
+  dayBookings?: Booking[];
+  therapistId?: string;
+  excludeBookingId?: string;
+}): AvailableSlot[] {
+  return computeScheduleSlots(input).filter((slot) => slot.available);
 }
 
 function getDoctorBookingBlocks(
@@ -537,6 +568,73 @@ export function computeConsultationAvailableSlots(input: {
   return slots;
 }
 
+export function computeConsultationScheduleSlots(input: {
+  windows: AvailableWindow[];
+  durationMinutes: number;
+  date?: string;
+  dayBookings?: Booking[];
+  doctorId?: string;
+  roomId?: string;
+  stepMinutes?: number;
+  excludeBookingId?: string;
+}): ScheduleSlot[] {
+  const {
+    windows,
+    durationMinutes,
+    date,
+    dayBookings,
+    doctorId,
+    roomId,
+    stepMinutes = 5,
+    excludeBookingId,
+  } = input;
+  if (!durationMinutes || windows.length === 0) return [];
+
+  const slots: ScheduleSlot[] = [];
+  const now = new Date();
+  const isToday = date ? formatDateInput(now) === date : false;
+  const nowMin = isToday ? now.getHours() * 60 + now.getMinutes() : 0;
+
+  for (const window of windows) {
+    const startMin = timeToMinutes(window.start);
+    const endMin = timeToMinutes(window.end);
+    for (let t = startMin; t + durationMinutes <= endMin; t += stepMinutes) {
+      const startTime = minutesToTime(t);
+      const endTime = minutesToTime(t + durationMinutes);
+      const isPast = isToday && t < nowMin;
+      const hasDoctorConflict =
+        Boolean(date && doctorId && dayBookings) &&
+        hasDoctorConflictAtSlot(
+          dayBookings!,
+          doctorId!,
+          date!,
+          startTime,
+          durationMinutes,
+          excludeBookingId,
+        );
+      const hasRoomConflict =
+        Boolean(date && roomId && dayBookings) &&
+        hasRoomConflictAtSlot(
+          dayBookings!,
+          roomId!,
+          date!,
+          startTime,
+          durationMinutes,
+          excludeBookingId,
+        );
+
+      slots.push({
+        startTime,
+        endTime,
+        label: `${formatTimeInputValue(startTime)} – ${formatTimeInputValue(endTime)}`,
+        available: !isPast && !hasDoctorConflict && !hasRoomConflict,
+      });
+    }
+  }
+
+  return slots;
+}
+
 export function getConsultationAvailableRooms<T extends { id: string }>(
   rooms: T[],
   dayBookings: Booking[],
@@ -669,9 +767,14 @@ export function validateBookingSlot(
   }
 
   const slotStart = input.startTime;
-  const slotEnd = formatTime(end);
+  const slotEnd = toTimeInputValue(end);
 
-  if (input.therapist?.consultationStartTime && input.therapist.consultationEndTime) {
+  if (
+    !options?.overrideScheduleConstraints &&
+    input.therapist?.requiresConsultationHours !== false &&
+    input.therapist?.consultationStartTime &&
+    input.therapist?.consultationEndTime
+  ) {
     if (
       !isWithinTimeRange(
         input.therapist.consultationStartTime,
@@ -688,7 +791,7 @@ export function validateBookingSlot(
     }
   }
 
-  if (input.availability && input.availability.length > 0) {
+  if (!options?.overrideScheduleConstraints && input.availability && input.availability.length > 0) {
     const bookingDate = startOfDay(parseDateInput(input.date));
     const dayOfWeek = WEEKDAY_TO_ENUM[bookingDate.getDay()];
 

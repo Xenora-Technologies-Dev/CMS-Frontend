@@ -1,6 +1,7 @@
 'use client';
 
 import { AdminSidebarNav } from '@/components/layout/admin-sidebar-nav';
+import { AppVersion } from '@/components/shared/app-version';
 import { useClinicOptional } from '@/components/providers/clinic-provider';
 import { getClinicDisplayName } from '@/lib/clinic-api';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,9 @@ export function AdminMobileNav() {
         </SheetHeader>
         <div className="min-h-0 flex-1 overflow-hidden">
           <AdminSidebarNav onNavigate={() => setOpen(false)} />
+        </div>
+        <div className="shrink-0 border-t px-4 py-3">
+          <AppVersion />
         </div>
       </SheetContent>
     </Sheet>

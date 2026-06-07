@@ -1,6 +1,7 @@
 'use client';
 
 import { TherapistSidebarNav } from '@/components/layout/therapist-sidebar-nav';
+import { AppVersion } from '@/components/shared/app-version';
 import { useAuth } from '@/components/auth/auth-provider';
 import { Stethoscope } from 'lucide-react';
 import Link from 'next/link';
@@ -25,6 +26,9 @@ export function TherapistSidebar() {
       </div>
       <div className="min-h-0 flex-1">
         <TherapistSidebarNav />
+      </div>
+      <div className="shrink-0 border-t border-sidebar-border px-4 py-3">
+        <AppVersion />
       </div>
     </aside>
   );

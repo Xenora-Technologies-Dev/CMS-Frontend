@@ -1,23 +1,31 @@
 'use client';
 
 import { BookingsNeedsAttentionPanel } from '@/components/booking/bookings-needs-attention-panel';
+import { DashboardBookingList } from '@/components/dashboard/dashboard-booking-list';
 import { fetchAdminDashboardData } from '@/lib/dashboard-api';
 import type { ActivityItem, DashboardStats } from '@/lib/dashboard-api';
-import type { Booking } from '@/lib/types';
+import type { Booking, Doctor, Room, Therapist } from '@/lib/types';
+import { listDoctors } from '@/lib/doctor-api';
+import { listRooms } from '@/lib/room-api';
+import { listTherapists } from '@/lib/therapist-api';
 import { RecentActivity } from '@/components/dashboard/recent-activity';
 import { StatCard } from '@/components/dashboard/stat-card';
-import { TodaySchedule } from '@/components/dashboard/today-schedule';
 import { UpcomingAppointments } from '@/components/dashboard/upcoming-appointments';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CalendarDays, ClipboardList, RefreshCw, Stethoscope, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 export function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [todayBookings, setTodayBookings] = useState<Booking[]>([]);
+  const [todayByType, setTodayByType] = useState({ therapy: [] as Booking[], consultation: [] as Booking[] });
+  const [upcomingByType, setUpcomingByType] = useState({ therapy: [] as Booking[], consultation: [] as Booking[] });
   const [upcoming, setUpcoming] = useState<Booking[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [therapists, setTherapists] = useState<Therapist[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,11 +33,20 @@ export function AdminDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchAdminDashboardData();
+      const [data, therapistResult, doctorResult, roomResult] = await Promise.all([
+        fetchAdminDashboardData(),
+        listTherapists({ limit: 100, isActive: true }),
+        listDoctors({ limit: 100, isActive: true }),
+        listRooms({ limit: 100, isActive: true }),
+      ]);
       setStats(data.stats);
-      setTodayBookings(data.todayBookings);
+      setTodayByType(data.todayByType);
+      setUpcomingByType(data.upcomingByType);
       setUpcoming(data.upcoming);
       setActivity(data.activity);
+      setTherapists(therapistResult.data);
+      setDoctors(doctorResult.data);
+      setRooms(roomResult.data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard');
     } finally {
@@ -93,18 +110,67 @@ export function AdminDashboard() {
         />
       </div>
 
-      <BookingsNeedsAttentionPanel compact />
+      <BookingsNeedsAttentionPanel compact onActionComplete={() => void loadDashboard()} />
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <TodaySchedule bookings={todayBookings} />
+        <div className="space-y-6 lg:col-span-2">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">Today&apos;s Appointments</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {!loading &&
+              todayByType.therapy.length === 0 &&
+              todayByType.consultation.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  No appointments scheduled today
+                </p>
+              ) : (
+                <DashboardBookingList
+                  title="Today's Appointments"
+                  therapyBookings={todayByType.therapy}
+                  consultationBookings={todayByType.consultation}
+                  showPostponeCancel
+                  hideHeader
+                  therapists={therapists}
+                  doctors={doctors}
+                  rooms={rooms}
+                  onActionComplete={() => void loadDashboard()}
+                />
+              )}
+            </CardContent>
+          </Card>
         </div>
-        <div>
-          <UpcomingAppointments bookings={upcoming} />
+
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">Upcoming Bookings</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {upcoming.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">No upcoming appointments</p>
+              ) : (
+                <div className="space-y-6">
+                  <DashboardBookingList
+                    title="Upcoming Bookings"
+                    therapyBookings={upcomingByType.therapy}
+                    consultationBookings={upcomingByType.consultation}
+                    showPostponeCancel
+                    hideHeader
+                    therapists={therapists}
+                    doctors={doctors}
+                    rooms={rooms}
+                    onActionComplete={() => void loadDashboard()}
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 
-      <RecentActivity items={activity} />
+      <RecentActivity items={activity} viewMoreHref="/admin/activity-log" />
     </div>
   );
 }

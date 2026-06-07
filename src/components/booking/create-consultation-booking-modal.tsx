@@ -3,6 +3,7 @@
 import { AvailableSlotsPicker } from '@/components/booking/available-slots-picker';
 import { PatientSearch } from '@/components/booking/patient-search';
 import { QuickAddPatientDialog } from '@/components/booking/quick-add-patient-dialog';
+import { useSocketEvent } from '@/components/providers/socket-provider';
 import { useToast } from '@/components/providers/toast-provider';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,13 +24,14 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  computeConsultationAvailableSlots,
   computeConsultationAvailableWindows,
+  computeConsultationScheduleSlots,
   getConsultationAvailableRooms,
 } from '@/lib/booking-validation';
 import { createBooking, fetchBookingsForDate, searchPatients } from '@/lib/booking-api';
 import { listPublicHolidays } from '@/lib/holiday-api';
 import { getFriendlyErrorMessage } from '@/lib/error-utils';
+import { SocketEvents } from '@/lib/socket-events';
 import type { Booking, BookingMode, Doctor, PublicHoliday, Room } from '@/lib/types';
 import {
   combineDateAndTime,
@@ -41,7 +43,7 @@ import {
   startOfDay,
 } from '@/lib/utils';
 import { Plus } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export interface ConsultationSlotPrefill {
   roomId?: string;
@@ -84,7 +86,15 @@ export function CreateConsultationBookingModal({
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [dayBookings, setDayBookings] = useState<Booking[]>([]);
   const [holidays, setHolidays] = useState<PublicHoliday[]>([]);
-  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsRefreshing, setSlotsRefreshing] = useState(false);
+  const [slotsError, setSlotsError] = useState<string | null>(null);
+  const slotsRefreshRequestIdRef = useRef(0);
+  const slotsBackgroundRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const consultationRooms = useMemo(
+    () => rooms.filter((room) => room.roomType === 'CONSULTATION' || !room.roomType),
+    [rooms],
+  );
 
   const selectedDoctor = useMemo(
     () => doctors.find((d) => d.id === doctorId),
@@ -93,7 +103,8 @@ export function CreateConsultationBookingModal({
 
   const loadSchedule = useCallback(async () => {
     if (!date) return;
-    setSlotsLoading(true);
+    const requestId = ++slotsRefreshRequestIdRef.current;
+    setSlotsRefreshing(true);
     try {
       const bookingDate = parseDateInput(date);
       const [bookings, holidayResult] = await Promise.all([
@@ -104,15 +115,39 @@ export function CreateConsultationBookingModal({
           dateTo: endOfDay(bookingDate).toISOString(),
         }),
       ]);
+      if (requestId !== slotsRefreshRequestIdRef.current) return;
       setDayBookings(bookings);
       setHolidays(holidayResult.data);
-    } catch {
+      setSlotsError(null);
+    } catch (err) {
+      if (requestId !== slotsRefreshRequestIdRef.current) return;
       setDayBookings([]);
       setHolidays([]);
+      setSlotsError(err instanceof Error ? err.message : 'Failed to refresh available slots');
     } finally {
-      setSlotsLoading(false);
+      if (requestId === slotsRefreshRequestIdRef.current) {
+        setSlotsRefreshing(false);
+      }
     }
   }, [date]);
+
+  const scheduleBackgroundRefresh = useCallback(() => {
+    if (slotsBackgroundRefreshTimerRef.current) {
+      clearTimeout(slotsBackgroundRefreshTimerRef.current);
+    }
+    slotsBackgroundRefreshTimerRef.current = setTimeout(() => {
+      slotsBackgroundRefreshTimerRef.current = null;
+      void loadSchedule();
+    }, 400);
+  }, [loadSchedule]);
+
+  const handleManualSlotRefresh = useCallback(() => {
+    if (slotsBackgroundRefreshTimerRef.current) {
+      clearTimeout(slotsBackgroundRefreshTimerRef.current);
+      slotsBackgroundRefreshTimerRef.current = null;
+    }
+    void loadSchedule();
+  }, [loadSchedule]);
 
   useEffect(() => {
     if (!open) return;
@@ -125,12 +160,33 @@ export function CreateConsultationBookingModal({
     setBookingMode('WALK_IN');
     setNotes('');
     setError(null);
+    setSlotsError(null);
+    if (slotsBackgroundRefreshTimerRef.current) {
+      clearTimeout(slotsBackgroundRefreshTimerRef.current);
+      slotsBackgroundRefreshTimerRef.current = null;
+    }
   }, [open, prefill, defaultDate]);
 
   useEffect(() => {
     if (!open || !date) return;
     void loadSchedule();
   }, [open, date, loadSchedule]);
+
+  useSocketEvent(
+    SocketEvents.BOOKING_UPDATED,
+    () => {
+      if (open && date) scheduleBackgroundRefresh();
+    },
+    open && Boolean(date),
+  );
+
+  useSocketEvent(
+    SocketEvents.SCHEDULE_UPDATED,
+    () => {
+      if (open && date) scheduleBackgroundRefresh();
+    },
+    open && Boolean(date),
+  );
 
   const availableWindows = useMemo(
     () =>
@@ -144,9 +200,9 @@ export function CreateConsultationBookingModal({
     [date, durationMinutes, selectedDoctor, dayBookings, holidays],
   );
 
-  const availableSlots = useMemo(
+  const scheduleSlots = useMemo(
     () =>
-      computeConsultationAvailableSlots({
+      computeConsultationScheduleSlots({
         windows: availableWindows,
         durationMinutes,
         date,
@@ -158,24 +214,24 @@ export function CreateConsultationBookingModal({
   );
 
   const availableStartTimes = useMemo(
-    () => availableSlots.map((slot) => slot.startTime),
-    [availableSlots],
+    () => scheduleSlots.filter((slot) => slot.available).map((slot) => slot.startTime),
+    [scheduleSlots],
   );
 
   const availableRooms = useMemo(
     () =>
-      getConsultationAvailableRooms(rooms, dayBookings, date, time, durationMinutes),
-    [rooms, dayBookings, date, time, durationMinutes],
+      getConsultationAvailableRooms(consultationRooms, dayBookings, date, time, durationMinutes),
+    [consultationRooms, dayBookings, date, time, durationMinutes],
   );
 
   const scheduleReady = Boolean(date && doctorId && durationMinutes);
 
   useEffect(() => {
-    if (!open || slotsLoading) return;
+    if (!open) return;
     if (time && !availableStartTimes.includes(time)) {
       setTime('');
     }
-  }, [availableStartTimes, time, open, slotsLoading]);
+  }, [availableStartTimes, time, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -300,13 +356,15 @@ export function CreateConsultationBookingModal({
                 <Label>Time slot *</Label>
                 <AvailableSlotsPicker
                   windows={availableWindows}
-                  slots={availableSlots}
+                  slots={scheduleSlots}
                   durationMinutes={durationMinutes}
                   value={time}
                   onChange={setTime}
-                  loading={slotsLoading}
+                  refreshing={slotsRefreshing}
+                  onRefresh={handleManualSlotRefresh}
                   resourceLabel="doctor"
                 />
+                {slotsError && <p className="text-xs text-destructive">{slotsError}</p>}
               </div>
             )}
 
@@ -323,7 +381,7 @@ export function CreateConsultationBookingModal({
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  {(time ? availableRooms : rooms).map((room) => (
+                  {(time ? availableRooms : consultationRooms).map((room) => (
                     <SelectItem key={room.id} value={room.id}>
                       {room.name}
                       {room.code ? ` (${room.code})` : ''}

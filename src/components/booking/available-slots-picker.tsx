@@ -1,19 +1,45 @@
 'use client';
 
-import type { AvailableSlot, AvailableWindow } from '@/lib/booking-validation';
+import type { AvailableWindow, ScheduleSlot } from '@/lib/booking-validation';
 import { cn, formatDuration, formatTimeInputValue } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
 
 interface AvailableSlotsPickerProps {
   windows: AvailableWindow[];
-  slots: AvailableSlot[];
+  slots: ScheduleSlot[];
   durationMinutes: number;
   value?: string;
   onChange: (startTime: string) => void;
-  loading?: boolean;
+  refreshing?: boolean;
+  onRefresh?: () => void;
   /** e.g. "therapist" or "doctor" for empty-state copy */
   resourceLabel?: string;
+}
+
+function SlotLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-3.5 w-8 rounded border-2 border-primary bg-primary shadow-sm" aria-hidden />
+        Selected
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          className="h-3.5 w-8 rounded border border-slate-200 bg-white shadow-sm"
+          aria-hidden
+        />
+        Available
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          className="h-3.5 w-8 rounded border border-slate-200 bg-slate-100 opacity-70"
+          aria-hidden
+        />
+        Unavailable
+      </span>
+    </div>
+  );
 }
 
 export function AvailableSlotsPicker({
@@ -22,18 +48,10 @@ export function AvailableSlotsPicker({
   durationMinutes,
   value,
   onChange,
-  loading,
+  refreshing,
+  onRefresh,
   resourceLabel = 'therapist',
 }: AvailableSlotsPickerProps) {
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-8 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading available slots…
-      </div>
-    );
-  }
-
   if (windows.length === 0) {
     return (
       <div className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
@@ -52,9 +70,36 @@ export function AvailableSlotsPicker({
 
   return (
     <div className="space-y-3 rounded-lg border bg-slate-50/80 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-medium text-slate-800">Available slots</p>
-        <span className="text-xs text-muted-foreground">{formatDuration(durationMinutes)} each</span>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-slate-800">Available slots</p>
+          <SlotLegend />
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-1.5">
+            {onRefresh && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={onRefresh}
+                disabled={refreshing}
+                aria-label="Refresh available slots"
+              >
+                <RefreshCw className={cn('mr-1 h-3.5 w-3.5', refreshing && 'animate-spin')} />
+                Refresh
+              </Button>
+            )}
+          </div>
+          {refreshing && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Updating slots…
+            </span>
+          )}
+          <span className="text-xs text-muted-foreground">{formatDuration(durationMinutes)} each</span>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-1.5">
@@ -69,21 +114,31 @@ export function AvailableSlotsPicker({
       </div>
 
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-        {slots.map((slot) => (
-          <Button
-            key={slot.startTime}
-            type="button"
-            size="sm"
-            variant={value === slot.startTime ? 'default' : 'outline'}
-            className={cn(
-              'h-9 justify-center px-2 text-xs font-medium',
-              value === slot.startTime && 'shadow-sm',
-            )}
-            onClick={() => onChange(slot.startTime)}
-          >
-            {slot.label}
-          </Button>
-        ))}
+        {slots.map((slot) => {
+          const isSelected = value === slot.startTime;
+          const isAvailable = slot.available;
+
+          return (
+            <Button
+              key={slot.startTime}
+              type="button"
+              size="sm"
+              variant={isSelected ? 'default' : 'outline'}
+              disabled={!isAvailable}
+              className={cn(
+                'h-9 justify-center px-2 text-xs font-medium',
+                isSelected && 'shadow-sm',
+                !isAvailable &&
+                  'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 opacity-70 hover:bg-slate-100 hover:text-slate-400',
+              )}
+              onClick={() => {
+                if (isAvailable) onChange(slot.startTime);
+              }}
+            >
+              {slot.label}
+            </Button>
+          );
+        })}
       </div>
     </div>
   );

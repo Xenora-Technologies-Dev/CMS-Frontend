@@ -1,6 +1,7 @@
 'use client';
 
 import { AdminSidebarNav } from '@/components/layout/admin-sidebar-nav';
+import { AppVersion } from '@/components/shared/app-version';
 import { useClinicOptional } from '@/components/providers/clinic-provider';
 import { getClinicDisplayName } from '@/lib/clinic-api';
 import { Stethoscope } from 'lucide-react';
@@ -25,6 +26,9 @@ export function AdminSidebar() {
       </div>
       <div className="min-h-0 flex-1">
         <AdminSidebarNav />
+      </div>
+      <div className="shrink-0 border-t border-sidebar-border px-4 py-3">
+        <AppVersion />
       </div>
     </aside>
   );

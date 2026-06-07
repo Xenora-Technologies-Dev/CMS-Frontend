@@ -21,10 +21,11 @@ import {
   listBookings,
   restoreBooking,
 } from '@/lib/booking-api';
+import { listDoctors } from '@/lib/doctor-api';
 import { listRooms } from '@/lib/room-api';
 import { listTherapists } from '@/lib/therapist-api';
 import { listTherapies } from '@/lib/therapy-api';
-import type { Booking, PaginatedMeta, Room, Therapist, Therapy } from '@/lib/types';
+import type { Booking, Doctor, PaginatedMeta, Room, Therapist, Therapy } from '@/lib/types';
 import { parseDateInput, startOfDay, endOfDay } from '@/lib/utils';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useToast } from '@/components/providers/toast-provider';
@@ -43,6 +44,7 @@ export function AppointmentList() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [meta, setMeta] = useState<PaginatedMeta>(DEFAULT_META);
   const [therapists, setTherapists] = useState<Therapist[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [therapies, setTherapies] = useState<Therapy[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,12 +60,14 @@ export function AppointmentList() {
   const debouncedPatientPhone = useDebouncedValue(filters.patientPhone);
 
   const loadResources = useCallback(async () => {
-    const [therapistResult, roomResult, therapyResult] = await Promise.all([
+    const [therapistResult, doctorResult, roomResult, therapyResult] = await Promise.all([
       listTherapists({ limit: RESOURCE_LIMIT, isActive: true }),
+      listDoctors({ limit: RESOURCE_LIMIT, isActive: true }),
       listRooms({ limit: RESOURCE_LIMIT, isActive: true }),
       listTherapies({ limit: RESOURCE_LIMIT, isActive: true }),
     ]);
     setTherapists(therapistResult.data);
+    setDoctors(doctorResult.data);
     setRooms(roomResult.data);
     setTherapies(therapyResult.data);
   }, []);
@@ -289,6 +293,7 @@ export function AppointmentList() {
         onOpenChange={setRescheduleOpen}
         booking={selectedBooking}
         therapists={therapists}
+        doctors={doctors}
         rooms={rooms}
         onSuccess={() => void loadBookings()}
       />

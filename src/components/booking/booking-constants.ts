@@ -1,5 +1,5 @@
-export const CALENDAR_DAY_START_HOUR = 8;
-export const CALENDAR_DAY_END_HOUR = 18;
+export const CALENDAR_DAY_START_HOUR = 0;
+export const CALENDAR_DAY_END_HOUR = 24;
 export const CALENDAR_SLOT_MINUTES = 15;
 export const CALENDAR_SLOT_HEIGHT = 32;
 export const CALENDAR_MIN_ROOM_COLUMN_WIDTH = 160;

@@ -92,7 +92,7 @@ export function NotificationBell({ notificationsHref }: NotificationBellProps) {
         {notifications.length === 0 ? (
           <p className="px-2 py-6 text-center text-sm text-muted-foreground">No notifications</p>
         ) : (
-          notifications.map((n) => (
+          notifications.slice(0, 5).map((n) => (
             <DropdownMenuItem
               key={n.id}
               className={cn(

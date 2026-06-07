@@ -19,13 +19,19 @@ const COLORS = {
 
 interface RecentActivityProps {
   items: ActivityItem[];
+  viewMoreHref?: string;
 }
 
-export function RecentActivity({ items }: RecentActivityProps) {
+export function RecentActivity({ items, viewMoreHref }: RecentActivityProps) {
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
         <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
+        {viewMoreHref && items.length > 0 && (
+          <a href={viewMoreHref} className="text-xs font-medium text-primary hover:underline">
+            View more
+          </a>
+        )}
       </CardHeader>
       <CardContent>
         {items.length === 0 ? (

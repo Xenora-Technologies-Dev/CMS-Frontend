@@ -1,6 +1,7 @@
 'use client';
 
 import { DoctorSidebarNav } from '@/components/layout/doctor-sidebar-nav';
+import { AppVersion } from '@/components/shared/app-version';
 import { useAuth } from '@/components/auth/auth-provider';
 import { UserRound } from 'lucide-react';
 import Link from 'next/link';
@@ -25,6 +26,9 @@ export function DoctorSidebar() {
       </div>
       <div className="min-h-0 flex-1">
         <DoctorSidebarNav />
+      </div>
+      <div className="shrink-0 border-t border-sidebar-border px-4 py-3">
+        <AppVersion />
       </div>
     </aside>
   );

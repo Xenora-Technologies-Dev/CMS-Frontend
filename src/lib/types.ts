@@ -427,6 +427,7 @@ export interface UpdateBookingPayload {
 export interface RescheduleBookingPayload {
   startTime: string;
   therapistId?: string;
+  doctorId?: string;
   roomId?: string;
 }
 

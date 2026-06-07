@@ -6,6 +6,7 @@ import {
   DoorOpen,
   FileBarChart,
   HeartPulse,
+  History,
   LayoutDashboard,
   Palmtree,
   Shield,
@@ -125,6 +126,12 @@ export const ADMIN_NAV_MAIN: AdminNavItem[] = [
     href: '/admin/users',
     icon: UsersRound,
   },
+  {
+    type: 'link',
+    title: 'Activity Log',
+    href: '/admin/activity-log',
+    icon: History,
+  },
 ];
 
 export const ADMIN_NAV_SECONDARY: AdminNavItem[] = [
@@ -210,6 +217,10 @@ const PAGE_META: Record<string, AdminPageMeta> = {
   },
   '/admin/doctors/new': { title: 'Add Doctor', description: 'Onboard a new doctor to the clinic.' },
   '/admin/users': { title: 'Users', description: 'Clinic staff accounts and roles.' },
+  '/admin/activity-log': {
+    title: 'Activity Log',
+    description: 'Audit trail of clinic actions and changes.',
+  },
   '/admin/notifications': { title: 'Notifications', description: 'System alerts and activity updates.' },
   '/admin/settings': {
     title: 'Clinic Settings',

@@ -47,7 +47,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       const [recent, unreadResult] = await Promise.all([
-        listNotifications({ limit: 8 }),
+        listNotifications({ limit: 5 }),
         listNotifications({ limit: 1, unreadOnly: true }),
       ]);
       setNotifications(recent.data);
@@ -67,7 +67,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     playNotificationSound();
     setNotifications((prev) => {
       const without = prev.filter((n) => n.id !== notification.id);
-      return [notification, ...without].slice(0, 8);
+      return [notification, ...without].slice(0, 5);
     });
     if (!notification.readAt) {
       setUnreadTotal((count) => count + 1);

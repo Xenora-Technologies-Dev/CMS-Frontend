@@ -5,12 +5,15 @@ import { AvailableSlotsPicker } from '@/components/booking/available-slots-picke
 import { PatientSearch } from '@/components/booking/patient-search';
 import { QuickAddPatientDialog } from '@/components/booking/quick-add-patient-dialog';
 import { SlotOccupancyPreview } from '@/components/booking/slot-occupancy-preview';
+import { useClinicOptional } from '@/components/providers/clinic-provider';
 import { useSocketEvent } from '@/components/providers/socket-provider';
+import { isAllowBookingOutsideConsultationHoursEnabled } from '@/lib/clinic-api';
 import { SocketEvents } from '@/lib/socket-events';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -42,12 +45,11 @@ import {
   updateBooking,
 } from '@/lib/booking-api';
 import {
-  computeAvailableSlots,
   computeAvailableWindows,
+  computeScheduleSlots,
   computeEndTimeFromSlot,
   getAvailableRooms,
   hasBlockingSlotIssues,
-  isScheduleConstraintIssue,
   validateBookingSlot,
   type SlotValidationInput,
   type ApprovedLeaveBlock,
@@ -73,7 +75,7 @@ import {
 } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Plus } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -124,20 +126,29 @@ export function BookingFormModal({
 }: BookingFormModalProps) {
   const { progress, run } = useProgressAction();
   const { showBookingSuccess } = useToast();
+  const clinicContext = useClinicOptional();
+  const overrideScheduleConstraints = isAllowBookingOutsideConsultationHoursEnabled(
+    clinicContext?.clinic,
+  );
   const [step, setStep] = useState<'form' | 'summary'>('form');
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [overrideScheduleConstraints, setOverrideScheduleConstraints] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [availability, setAvailability] = useState<
     import('@/lib/types').TherapistAvailability[]
   >([]);
   const [previewBookings, setPreviewBookings] = useState<Booking[]>(dayBookings);
   const [approvedLeaves, setApprovedLeaves] = useState<ApprovedLeaveBlock[]>([]);
-  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsRefreshing, setSlotsRefreshing] = useState(false);
+  const [slotsError, setSlotsError] = useState<string | null>(null);
+  const slotsLoadedForKeyRef = useRef<string | null>(null);
+  const slotsRefreshRequestIdRef = useRef(0);
+  const slotsBackgroundRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [quickAddPatientOpen, setQuickAddPatientOpen] = useState(false);
   const [activeTreatmentPlan, setActiveTreatmentPlan] = useState<TreatmentPlan | null>(null);
   const [packageLoading, setPackageLoading] = useState(false);
   const [packageChoice, setPackageChoice] = useState<PackageChoice>(null);
+  const dayBookingsRef = useRef(dayBookings);
+  dayBookingsRef.current = dayBookings;
 
   const form = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
@@ -147,7 +158,7 @@ export function BookingFormModal({
       therapyId: '',
       roomId: '',
       date: formatDateInput(defaultDate),
-      startTime: '09:00',
+      startTime: '',
       notes: '',
     },
     mode: 'onChange',
@@ -207,6 +218,7 @@ export function BookingFormModal({
         dayBookings: previewBookings,
         approvedLeaves,
         excludeBookingId: mode === 'edit' && booking ? booking.id : undefined,
+        overrideScheduleConstraints,
       }),
     [
       watched.date,
@@ -217,12 +229,13 @@ export function BookingFormModal({
       approvedLeaves,
       mode,
       booking,
+      overrideScheduleConstraints,
     ],
   );
 
-  const availableSlots = useMemo(
+  const scheduleSlots = useMemo(
     () =>
-      computeAvailableSlots({
+      computeScheduleSlots({
         windows: availableWindows,
         durationMinutes: selectedTherapy?.durationMinutes ?? 0,
         date: watched.date,
@@ -242,8 +255,8 @@ export function BookingFormModal({
   );
 
   const availableStartTimes = useMemo(
-    () => availableSlots.map((slot) => slot.startTime),
-    [availableSlots],
+    () => scheduleSlots.filter((slot) => slot.available).map((slot) => slot.startTime),
+    [scheduleSlots],
   );
 
   const availableRooms = useMemo(
@@ -264,22 +277,10 @@ export function BookingFormModal({
     [slotPreviewInput, validationOptions],
   );
 
-  const rawScheduleIssues = useMemo(
-    () => validateBookingSlot(slotPreviewInput),
-    [slotPreviewInput],
-  );
-
-  const scheduleConstraintIssues = rawScheduleIssues.filter(isScheduleConstraintIssue);
   const hasBlockingIssues = hasBlockingSlotIssues(availabilityIssues, validationOptions);
   const scheduleReady = Boolean(watched.therapistId && watched.therapyId && watched.date);
   const timeReady = Boolean(watched.startTime);
-  const showRoomStep = scheduleReady && timeReady && !slotsLoading;
-
-  const showOverrideToggle =
-    scheduleConstraintIssues.length > 0 ||
-    (Boolean(watched.startTime) &&
-      availableStartTimes.length > 0 &&
-      !availableStartTimes.includes(watched.startTime));
+  const showRoomStep = scheduleReady && timeReady;
 
   const isFormValid =
     form.formState.isValid &&
@@ -296,8 +297,8 @@ export function BookingFormModal({
     if (mode === 'edit' && booking) {
       form.reset({
         patientId: booking.patientId,
-        therapistId: booking.therapistId ?? undefined,
-        therapyId: booking.therapyId ?? undefined,
+        therapistId: booking.therapistId ?? '',
+        therapyId: booking.therapyId ?? '',
         roomId: booking.roomId,
         date: formatDateInput(new Date(booking.startTime)),
         startTime: toTimeInputValue(booking.startTime),
@@ -311,62 +312,107 @@ export function BookingFormModal({
         therapyId: '',
         roomId: prefill?.roomId ?? '',
         date: formatDateInput(baseDate),
-        startTime: prefill?.startTime ?? '09:00',
+        startTime: prefill?.startTime ?? '',
         notes: '',
       });
       setSelectedPatient(null);
     }
     setStep('form');
     setSubmitError(null);
-    setOverrideScheduleConstraints(false);
     setAvailability([]);
-    setPreviewBookings(dayBookings);
+    setPreviewBookings(dayBookingsRef.current);
     setApprovedLeaves([]);
-    setSlotsLoading(false);
+    setSlotsRefreshing(false);
+    setSlotsError(null);
+    slotsLoadedForKeyRef.current = null;
+    if (slotsBackgroundRefreshTimerRef.current) {
+      clearTimeout(slotsBackgroundRefreshTimerRef.current);
+      slotsBackgroundRefreshTimerRef.current = null;
+    }
     setActiveTreatmentPlan(null);
     setPackageChoice(null);
     setPackageLoading(false);
-  }, [mode, booking, prefill, defaultDate, dayBookings, form]);
+  }, [mode, booking, prefill, defaultDate, form]);
 
-  const loadSlotSchedule = useCallback(
-    async (options?: { silent?: boolean }) => {
-      if (!watched.therapistId || !watched.date) return [];
-      if (!options?.silent) setSlotsLoading(true);
-      try {
-        const date = parseDateInput(watched.date);
-        const start = new Date(date);
-        start.setHours(0, 0, 0, 0);
-        const end = new Date(date);
-        end.setHours(23, 59, 59, 999);
+  const loadSlotSchedule = useCallback(async () => {
+    if (!watched.therapistId || !watched.date) return [];
 
-        const [slots, bookings, leaveResult] = await Promise.all([
-          fetchTherapistAvailability(watched.therapistId),
-          fetchBookingsForDateRange(start, end, 250),
-          fetchApprovedLeaves(watched.therapistId, start.toISOString(), end.toISOString()),
-        ]);
-        setAvailability(slots);
-        setPreviewBookings(bookings);
-        setApprovedLeaves(
-          leaveResult.leaves.map((leave) => ({
-            startDateTime: leave.startDateTime,
-            endDateTime: leave.endDateTime,
-            isFullDay: leave.isFullDay,
-          })),
-        );
-        return bookings;
-      } catch {
+    const scheduleKey = `${watched.therapistId}:${watched.date}`;
+    const requestId = ++slotsRefreshRequestIdRef.current;
+    setSlotsRefreshing(true);
+
+    try {
+      const date = parseDateInput(watched.date);
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+
+      const [slots, bookings, leaveResult] = await Promise.all([
+        fetchTherapistAvailability(watched.therapistId),
+        fetchBookingsForDateRange(start, end, 250),
+        fetchApprovedLeaves(watched.therapistId, start.toISOString(), end.toISOString()),
+      ]);
+
+      if (requestId !== slotsRefreshRequestIdRef.current) {
         return [];
-      } finally {
-        if (!options?.silent) setSlotsLoading(false);
       }
-    },
-    [watched.therapistId, watched.date],
-  );
+
+      setAvailability(slots);
+      setPreviewBookings(bookings);
+      setApprovedLeaves(
+        leaveResult.leaves.map((leave) => ({
+          startDateTime: leave.startDateTime,
+          endDateTime: leave.endDateTime,
+          isFullDay: leave.isFullDay,
+        })),
+      );
+      slotsLoadedForKeyRef.current = scheduleKey;
+      setSlotsError(null);
+      return bookings;
+    } catch (err) {
+      if (requestId !== slotsRefreshRequestIdRef.current) {
+        return [];
+      }
+      setSlotsError(err instanceof Error ? err.message : 'Failed to refresh available slots');
+      return [];
+    } finally {
+      if (requestId === slotsRefreshRequestIdRef.current) {
+        setSlotsRefreshing(false);
+      }
+    }
+  }, [watched.therapistId, watched.date]);
+
+  const scheduleBackgroundSlotRefresh = useCallback(() => {
+    if (slotsBackgroundRefreshTimerRef.current) {
+      clearTimeout(slotsBackgroundRefreshTimerRef.current);
+    }
+    slotsBackgroundRefreshTimerRef.current = setTimeout(() => {
+      slotsBackgroundRefreshTimerRef.current = null;
+      void loadSlotSchedule();
+    }, 400);
+  }, [loadSlotSchedule]);
+
+  const handleManualSlotRefresh = useCallback(() => {
+    if (slotsBackgroundRefreshTimerRef.current) {
+      clearTimeout(slotsBackgroundRefreshTimerRef.current);
+      slotsBackgroundRefreshTimerRef.current = null;
+    }
+    void loadSlotSchedule();
+  }, [loadSlotSchedule]);
+
+  const resetFormRef = useRef(resetForm);
+  resetFormRef.current = resetForm;
 
   useEffect(() => {
     if (!open) return;
-    resetForm();
-  }, [open, resetForm]);
+    resetFormRef.current();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || scheduleReady) return;
+    setPreviewBookings(dayBookings);
+  }, [open, dayBookings, scheduleReady]);
 
   useEffect(() => {
     if (!watched.patientId) {
@@ -432,20 +478,15 @@ export function BookingFormModal({
   }, [open, mode, watched.patientId, watched.therapyId, isPackageTherapy]);
 
   useEffect(() => {
-    if (!open || mode === 'edit') return;
-    setActiveTreatmentPlan(null);
-    setPackageChoice(null);
-  }, [watched.therapyId, open, mode]);
-
-  useEffect(() => {
     if (!open || !scheduleReady) return;
+    setPreviewBookings(dayBookingsRef.current);
     void loadSlotSchedule();
   }, [open, scheduleReady, watched.therapistId, watched.date, loadSlotSchedule]);
 
   useSocketEvent(
     SocketEvents.LEAVE_UPDATED,
     () => {
-      if (open && scheduleReady) void loadSlotSchedule();
+      if (open && scheduleReady) scheduleBackgroundSlotRefresh();
     },
     open && scheduleReady,
   );
@@ -453,7 +494,7 @@ export function BookingFormModal({
   useSocketEvent(
     SocketEvents.BOOKING_UPDATED,
     () => {
-      if (open && scheduleReady) void loadSlotSchedule();
+      if (open && scheduleReady) scheduleBackgroundSlotRefresh();
     },
     open && scheduleReady,
   );
@@ -461,29 +502,29 @@ export function BookingFormModal({
   useSocketEvent(
     SocketEvents.SCHEDULE_UPDATED,
     () => {
-      if (open && scheduleReady) void loadSlotSchedule();
+      if (open && scheduleReady) scheduleBackgroundSlotRefresh();
     },
     open && scheduleReady,
   );
 
   useEffect(() => {
-    if (!open || mode === 'edit' || slotsLoading) return;
+    if (!open || mode === 'edit' || overrideScheduleConstraints) return;
     if (watched.startTime && !availableStartTimes.includes(watched.startTime)) {
       form.setValue('startTime', '');
       form.setValue('roomId', '');
     }
-  }, [availableStartTimes, watched.startTime, open, mode, slotsLoading, form]);
+  }, [availableStartTimes, watched.startTime, open, mode, overrideScheduleConstraints, form]);
 
   useEffect(() => {
     if (!open || mode === 'edit') return;
-    setOverrideScheduleConstraints(false);
+    slotsLoadedForKeyRef.current = null;
     form.setValue('startTime', '');
     form.setValue('roomId', '');
-  }, [watched.therapistId, watched.therapyId, open, mode, form]);
+  }, [watched.therapistId, open, mode, form]);
 
   useEffect(() => {
     if (!open || mode === 'edit') return;
-    setOverrideScheduleConstraints(false);
+    slotsLoadedForKeyRef.current = null;
     form.setValue('startTime', '');
     form.setValue('roomId', '');
   }, [watched.date, open, mode, form]);
@@ -492,13 +533,6 @@ export function BookingFormModal({
     if (!open || mode === 'edit') return;
     form.setValue('roomId', '');
   }, [watched.startTime, open, mode, form]);
-
-  useEffect(() => {
-    if (!open || mode === 'edit') return;
-    if (watched.startTime && !availableStartTimes.includes(watched.startTime)) {
-      setOverrideScheduleConstraints(false);
-    }
-  }, [watched.startTime, availableStartTimes, open, mode]);
 
   useEffect(() => {
     if (!open || !showRoomStep || mode === 'edit') return;
@@ -584,9 +618,7 @@ export function BookingFormModal({
   async function handleConfirm() {
     setSubmitError(null);
 
-    const freshBookings = scheduleReady
-      ? await loadSlotSchedule({ silent: true })
-      : previewBookings;
+    const freshBookings = scheduleReady ? await loadSlotSchedule() : previewBookings;
     const confirmInput: SlotValidationInput = {
       ...slotPreviewInput,
       dayBookings: freshBookings,
@@ -622,7 +654,7 @@ export function BookingFormModal({
       void (async () => {
         let freshBookings = previewBookings;
         if (scheduleReady) {
-          freshBookings = await loadSlotSchedule({ silent: true });
+          freshBookings = await loadSlotSchedule();
           const reviewIssues = validateBookingSlot(
             { ...slotPreviewInput, dayBookings: freshBookings },
             validationOptions,
@@ -667,6 +699,9 @@ export function BookingFormModal({
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
+          <DialogDescription className="sr-only">
+            {mode === 'create' ? 'Create a therapy booking' : 'Edit therapy booking details'}
+          </DialogDescription>
         </DialogHeader>
 
         {step === 'summary' &&
@@ -742,10 +777,7 @@ export function BookingFormModal({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Therapist</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value || undefined}
-                      >
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select therapist" />
@@ -778,10 +810,7 @@ export function BookingFormModal({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Therapy</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value || undefined}
-                      >
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select therapy" />
@@ -836,11 +865,12 @@ export function BookingFormModal({
                       <FormControl>
                         <AvailableSlotsPicker
                           windows={availableWindows}
-                          slots={availableSlots}
+                          slots={scheduleSlots}
                           durationMinutes={selectedTherapy.durationMinutes}
-                          value={field.value || undefined}
+                          value={field.value}
                           onChange={field.onChange}
-                          loading={slotsLoading}
+                          refreshing={slotsRefreshing}
+                          onRefresh={handleManualSlotRefresh}
                         />
                       </FormControl>
                       {field.value && endTime && (
@@ -848,27 +878,13 @@ export function BookingFormModal({
                           Ends at {formatTime(endTime)}
                         </p>
                       )}
+                      {slotsError && (
+                        <p className="text-xs text-destructive">{slotsError}</p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              )}
-
-              {showOverrideToggle && (
-                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={overrideScheduleConstraints}
-                    onChange={(e) => setOverrideScheduleConstraints(e.target.checked)}
-                  />
-                  <span>
-                    <span className="font-medium text-amber-950">Override schedule limits</span>
-                    <span className="mt-0.5 block text-xs text-amber-800/90">
-                      Allow booking outside consultation or availability hours.
-                    </span>
-                  </span>
-                </label>
               )}
 
               {showRoomStep && (
@@ -878,7 +894,7 @@ export function BookingFormModal({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Room</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || undefined}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select room" />

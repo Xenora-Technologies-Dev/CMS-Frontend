@@ -1,11 +1,13 @@
 'use client';
 
+import { useClinicOptional } from '@/components/providers/clinic-provider';
 import { Button } from '@/components/ui/button';
 import {
   autoDownloadAppointmentSlip,
   downloadAppointmentSlipPdf,
   printAppointmentSlipPdf,
 } from '@/lib/appointment-slip-utils';
+import { isAutoDownloadSlipsEnabled } from '@/lib/clinic-api';
 import type { Booking } from '@/lib/types';
 import { getPatientName, getTherapistName } from '@/lib/utils';
 import { CheckCircle2, Download, ExternalLink, X } from 'lucide-react';
@@ -17,6 +19,8 @@ interface BookingSuccessToastProps {
 }
 
 export function BookingSuccessToast({ booking, onDismiss }: BookingSuccessToastProps) {
+  const clinicContext = useClinicOptional();
+  const autoDownloadEnabled = isAutoDownloadSlipsEnabled(clinicContext?.clinic);
   const [slipLoading, setSlipLoading] = useState<'view' | 'download' | null>(null);
   const [slipError, setSlipError] = useState<string | null>(null);
 
@@ -26,6 +30,7 @@ export function BookingSuccessToast({ booking, onDismiss }: BookingSuccessToastP
   }, [onDismiss]);
 
   useEffect(() => {
+    if (!autoDownloadEnabled) return;
     let cancelled = false;
     void autoDownloadAppointmentSlip(booking).catch((err) => {
       if (!cancelled) {
@@ -35,7 +40,7 @@ export function BookingSuccessToast({ booking, onDismiss }: BookingSuccessToastP
     return () => {
       cancelled = true;
     };
-  }, [booking]);
+  }, [booking, autoDownloadEnabled]);
 
   const therapyTime = new Date(booking.startTime).toLocaleString('en-GB', {
     weekday: 'short',

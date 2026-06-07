@@ -114,7 +114,11 @@ export function TherapistDashboard() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <TodaySchedule bookings={todayBookings} calendarHref="/therapist/calendar" />
-          <UpcomingAppointments bookings={upcoming} title="Upcoming Patients" />
+          <UpcomingAppointments
+            bookings={upcoming}
+            title="Upcoming Patients"
+            viewerRole="therapist"
+          />
         </div>
 
         <div className="space-y-6">
@@ -175,7 +179,7 @@ export function TherapistDashboard() {
                 <p className="py-4 text-center text-sm text-muted-foreground">No notifications</p>
               ) : (
                 <div className="space-y-2">
-                  {notifications.map((n) => (
+                  {notifications.slice(0, 5).map((n) => (
                     <button
                       key={n.id}
                       type="button"

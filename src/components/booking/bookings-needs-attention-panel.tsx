@@ -13,10 +13,10 @@ import { listRooms } from '@/lib/room-api';
 import { listTherapists } from '@/lib/therapist-api';
 import type { Booking, Room, Therapist } from '@/lib/types';
 import { formatDateTime, getPatientName, getTherapistName } from '@/lib/utils';
-import { useSocketEvent } from '@/components/providers/socket-provider';
-import { SocketEvents } from '@/lib/socket-events';
-import { AlertTriangle, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+const POLL_INTERVAL_MS = 30 * 60 * 1000;
 
 interface BookingsNeedsAttentionPanelProps {
   compact?: boolean;
@@ -31,22 +31,27 @@ export function BookingsNeedsAttentionPanel({
   const { showBookingAction } = useToast();
   const canManageBookings = user?.role === 'ADMIN';
   const [bookings, setBookings] = useState<BookingNeedingAttention[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelBookingId, setCancelBookingId] = useState<string | null>(null);
+  const hasLoadedOnce = useRef(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options?: { background?: boolean }) => {
+    const isBackground = options?.background && hasLoadedOnce.current;
+    if (!isBackground && !hasLoadedOnce.current) {
+      setInitialLoading(true);
+    }
     try {
       const { bookings: rows } = await fetchBookingsNeedingAttention();
       setBookings(rows);
+      hasLoadedOnce.current = true;
     } catch {
       setBookings([]);
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
     }
   }, []);
 
@@ -59,11 +64,13 @@ export function BookingsNeedsAttentionPanel({
       setTherapists(therapistResult.data);
       setRooms(roomResult.data);
     });
-  }, [load]);
 
-  useSocketEvent(SocketEvents.LEAVE_UPDATED, () => void load());
-  useSocketEvent(SocketEvents.LEAVE_CONFLICT, () => void load());
-  useSocketEvent(SocketEvents.BOOKING_UPDATED, () => void load());
+    const interval = window.setInterval(() => {
+      void load({ background: true });
+    }, POLL_INTERVAL_MS);
+
+    return () => window.clearInterval(interval);
+  }, [load]);
 
   async function openReschedule(bookingId: string) {
     const { booking } = await fetchBooking(bookingId);
@@ -71,19 +78,12 @@ export function BookingsNeedsAttentionPanel({
   }
 
   function handleActionDone() {
-    void load();
+    void load({ background: true });
     onActionComplete?.();
   }
 
-  if (loading) {
-    return (
-      <Card className="border-amber-200 bg-amber-50/40">
-        <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Checking appointments needing attention…
-        </CardContent>
-      </Card>
-    );
+  if (initialLoading && bookings.length === 0) {
+    return null;
   }
 
   if (bookings.length === 0) {

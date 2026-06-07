@@ -10,8 +10,8 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'CliniqFlow',
-  description: 'CliniqFlow — Clinic Therapy & Appointment Management System',
+  title: 'CliniqFlow v1.5',
+  description: 'CliniqFlow v1.5 — Clinic Therapy & Appointment Management System',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

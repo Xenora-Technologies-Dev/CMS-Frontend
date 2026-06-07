@@ -11,7 +11,7 @@ import { listTherapies } from '@/lib/therapy-api';
 import { listPublicHolidays } from '@/lib/holiday-api';
 import type { Booking, PublicHoliday, Room, Therapist, Therapy } from '@/lib/types';
 import { endOfDay, startOfDay } from '@/lib/utils';
-import { cn, getTherapistColor, getTherapistName } from '@/lib/utils';
+import { cn, getTherapistName } from '@/lib/utils';
 import { BookingCardList } from '@/components/booking/booking-card';
 import { CalendarFilters } from '@/components/booking/calendar-filters';
 import {
@@ -22,8 +22,15 @@ import { BookingFormModal, type BookingSlotPrefill } from '@/components/booking/
 import { BookingRescheduleModal } from '@/components/booking/booking-reschedule-modal';
 import { BookingTimeline } from '@/components/booking/booking-timeline';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Plus, RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/components/providers/toast-provider';
 import { useSocketEvent } from '@/components/providers/socket-provider';
 import { useClinicOptional } from '@/components/providers/clinic-provider';
@@ -31,6 +38,7 @@ import { formatClinicLocation, getClinicDisplayName } from '@/lib/clinic-api';
 import { SocketEvents } from '@/lib/socket-events';
 
 const RESOURCE_LIMIT = 100;
+const ALL_VALUE = 'all';
 
 interface BookingCalendarProps {
   lockedTherapistId?: string;
@@ -56,17 +64,15 @@ export function BookingCalendar({
   const [rooms, setRooms] = useState<Room[]>([]);
   const [therapies, setTherapies] = useState<Therapy[]>([]);
   const [holidays, setHolidays] = useState<PublicHoliday[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hasLoadedOnce = useRef(false);
 
-  const [selectedTherapistIds, setSelectedTherapistIds] = useState<string[]>(
-    lockedTherapistId ? [lockedTherapistId] : [],
+  const [filterTherapistId, setFilterTherapistId] = useState<string>(
+    lockedTherapistId ?? ALL_VALUE,
   );
-  const [primaryTherapistId, setPrimaryTherapistId] = useState<string>(
-    lockedTherapistId ?? 'all',
-  );
-  const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>([]);
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [filterRoomId, setFilterRoomId] = useState<string>(ALL_VALUE);
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -86,98 +92,85 @@ export function BookingCalendar({
 
   const filteredBookings = useMemo(() => {
     let result = activeBookings;
-    if (selectedTherapistIds.length > 0) {
-      result = result.filter(
-        (b) => b.therapistId && selectedTherapistIds.includes(b.therapistId),
-      );
+    if (filterTherapistId !== ALL_VALUE) {
+      result = result.filter((b) => b.therapistId === filterTherapistId);
     }
-    if (selectedRoomIds.length > 0) {
-      result = result.filter((b) => selectedRoomIds.includes(b.roomId));
+    if (filterRoomId !== ALL_VALUE) {
+      result = result.filter((b) => b.roomId === filterRoomId);
     }
     return result;
-  }, [activeBookings, selectedTherapistIds, selectedRoomIds]);
+  }, [activeBookings, filterTherapistId, filterRoomId]);
 
   const filteredRooms = useMemo(() => {
-    if (selectedRoomIds.length === 0) return rooms;
-    return rooms.filter((r) => selectedRoomIds.includes(r.id));
-  }, [rooms, selectedRoomIds]);
+    if (filterRoomId === ALL_VALUE) return rooms;
+    return rooms.filter((r) => r.id === filterRoomId);
+  }, [rooms, filterRoomId]);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [dayBookings, therapistResult, roomResult, therapyResult, holidayResult] =
-        await Promise.all([
-          fetchBookingsForDate(selectedDate, RESOURCE_LIMIT, { bookingType: 'THERAPY' }),
-          listTherapists({ limit: RESOURCE_LIMIT, isActive: true }),
-          listRooms({ limit: RESOURCE_LIMIT, isActive: true, roomType: 'THERAPY' }),
-          listTherapies({ limit: RESOURCE_LIMIT, isActive: true }),
-          listPublicHolidays({
-            limit: RESOURCE_LIMIT,
-            dateFrom: startOfDay(selectedDate).toISOString(),
-            dateTo: endOfDay(selectedDate).toISOString(),
-          }),
-        ]);
-      setBookings(dayBookings);
-      setTherapists(
-        lockedTherapistId
-          ? therapistResult.data.filter((t) => t.id === lockedTherapistId)
-          : therapistResult.data,
-      );
-      setRooms(roomResult.data);
-      setTherapies(therapyResult.data);
-      setHolidays(holidayResult.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load calendar data');
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedDate]);
+  const loadData = useCallback(
+    async (options?: { background?: boolean }) => {
+      const isBackground = options?.background && hasLoadedOnce.current;
+      if (isBackground) {
+        setRefreshing(true);
+      } else if (!hasLoadedOnce.current) {
+        setInitialLoading(true);
+      } else {
+        setRefreshing(true);
+      }
+      setError(null);
+      try {
+        const [dayBookings, therapistResult, roomResult, therapyResult, holidayResult] =
+          await Promise.all([
+            fetchBookingsForDate(selectedDate, RESOURCE_LIMIT, { bookingType: 'THERAPY' }),
+            listTherapists({ limit: RESOURCE_LIMIT, isActive: true }),
+            listRooms({ limit: RESOURCE_LIMIT, isActive: true, roomType: 'THERAPY' }),
+            listTherapies({ limit: RESOURCE_LIMIT, isActive: true }),
+            listPublicHolidays({
+              limit: RESOURCE_LIMIT,
+              dateFrom: startOfDay(selectedDate).toISOString(),
+              dateTo: endOfDay(selectedDate).toISOString(),
+            }),
+          ]);
+        setBookings(dayBookings);
+        setTherapists(
+          lockedTherapistId
+            ? therapistResult.data.filter((t) => t.id === lockedTherapistId)
+            : therapistResult.data,
+        );
+        setRooms(roomResult.data);
+        setTherapies(therapyResult.data);
+        setHolidays(holidayResult.data);
+        hasLoadedOnce.current = true;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load calendar data');
+      } finally {
+        setInitialLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [selectedDate, lockedTherapistId],
+  );
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
 
   useSocketEvent(SocketEvents.BOOKING_UPDATED, () => {
-    void loadData();
+    void loadData({ background: true });
   });
 
   useSocketEvent(SocketEvents.SCHEDULE_UPDATED, () => {
-    void loadData();
+    void loadData({ background: true });
   });
 
   useEffect(() => {
     if (lockedTherapistId) {
-      setSelectedTherapistIds([lockedTherapistId]);
-      setPrimaryTherapistId(lockedTherapistId);
+      setFilterTherapistId(lockedTherapistId);
     }
   }, [lockedTherapistId]);
 
-  function handlePrimaryTherapistChange(id: string) {
-    if (lockedTherapistId) return;
-    setPrimaryTherapistId(id);
-    setSelectedTherapistIds(id === 'all' ? [] : [id]);
-  }
-
-  function handleTherapistToggle(id: string) {
-    if (lockedTherapistId) return;
-    setSelectedTherapistIds((current) =>
-      current.includes(id) ? current.filter((t) => t !== id) : [...current, id],
-    );
-  }
-
-  function handleRoomToggle(id: string) {
-    setSelectedRoomIds((current) =>
-      current.includes(id) ? current.filter((r) => r !== id) : [...current, id],
-    );
-  }
-
   function handleClearFilters() {
-    if (!lockedTherapistId) {
-      setSelectedTherapistIds([]);
-      setPrimaryTherapistId('all');
-    }
-    setSelectedRoomIds([]);
+    if (!lockedTherapistId) setFilterTherapistId(ALL_VALUE);
+    setFilterRoomId(ALL_VALUE);
   }
 
   function handleSelectBooking(booking: Booking) {
@@ -233,7 +226,7 @@ export function BookingCalendar({
       booking: updated,
       cancellationReason: reason || undefined,
     });
-    await loadData();
+    await loadData({ background: true });
   }
 
   async function handleComplete() {
@@ -241,7 +234,7 @@ export function BookingCalendar({
     if (!confirm('Mark this appointment as completed?')) return;
     await completeBooking(selectedBooking.id);
     setDetailOpen(false);
-    await loadData();
+    await loadData({ background: true });
   }
 
   const dateLabel = selectedDate.toLocaleDateString('en-GB', {
@@ -251,23 +244,11 @@ export function BookingCalendar({
     year: 'numeric',
   });
 
-  const filterProps = {
-    selectedDate,
-    onDateChange: setSelectedDate,
-    therapists,
-    rooms,
-    selectedTherapistIds,
-    selectedRoomIds,
-    onTherapistToggle: handleTherapistToggle,
-    onRoomToggle: handleRoomToggle,
-    onClearFilters: handleClearFilters,
-    primaryTherapistId,
-    onPrimaryTherapistChange: handlePrimaryTherapistChange,
-    lockTherapistFilter: !!lockedTherapistId,
-  };
-
   const resourcesReady =
     therapists.length > 0 && rooms.length > 0 && therapies.length > 0;
+
+  const hasActiveFilters =
+    filterTherapistId !== ALL_VALUE || filterRoomId !== ALL_VALUE;
 
   return (
     <div className="space-y-4">
@@ -282,17 +263,11 @@ export function BookingCalendar({
           <Button
             variant="outline"
             size="icon"
-            onClick={() => void loadData()}
+            onClick={() => void loadData({ background: true })}
             aria-label="Refresh"
+            disabled={refreshing}
           >
-            <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
-          </Button>
-          <Button
-            variant="outline"
-            className="lg:hidden"
-            onClick={() => setMobileFiltersOpen((v) => !v)}
-          >
-            Filters
+            <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
           </Button>
           {!lockedTherapistId && (
             <Button onClick={() => openCreate()} disabled={!resourcesReady}>
@@ -303,7 +278,7 @@ export function BookingCalendar({
         </div>
       </div>
 
-      {!resourcesReady && !loading && (
+      {!resourcesReady && !initialLoading && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           Add at least one active therapist, room, and therapy before creating bookings.
         </div>
@@ -316,16 +291,18 @@ export function BookingCalendar({
       )}
 
       <div className="flex flex-col gap-4 xl:flex-row">
-        <div
-          className={cn(
-            'xl:w-64 xl:shrink-0',
-            mobileFiltersOpen ? 'block' : 'hidden xl:block',
-          )}
-        >
-          <CalendarFilters {...filterProps} className="xl:sticky xl:top-6" />
+        <div className="hidden xl:block xl:w-56 xl:shrink-0">
+          <CalendarFilters
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            className="xl:sticky xl:top-6"
+          />
         </div>
 
         <div className="min-w-0 flex-1 space-y-4">
+          <div className="xl:hidden">
+            <CalendarFilters selectedDate={selectedDate} onDateChange={setSelectedDate} />
+          </div>
           <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
             <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between">
               <p className="text-sm font-medium text-slate-700">{dateLabel}</p>
@@ -338,47 +315,64 @@ export function BookingCalendar({
             <p className="mt-1 text-xs text-muted-foreground">
               {filteredBookings.length} active booking
               {filteredBookings.length === 1 ? '' : 's'}
-              {(selectedTherapistIds.length > 0 || selectedRoomIds.length > 0) && ' (filtered)'}
+              {hasActiveFilters && ' (filtered)'}
+              {refreshing && ' · Updating…'}
               {!lockedTherapistId && ' · Click an empty cell to book · Hover a booking for actions'}
               {lockedTherapistId && ' · View-only schedule'}
             </p>
           </div>
 
-          {therapists.length > 0 && !lockedTherapistId && (
-            <div className="flex flex-wrap gap-2 rounded-lg border bg-white p-3 shadow-sm">
-              <span className="w-full text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:w-auto sm:py-1">
-                Quick filter
-              </span>
-              {therapists.map((therapist) => (
-                <button
-                  key={therapist.id}
-                  type="button"
-                  onClick={() => {
-                    handleTherapistToggle(therapist.id);
-                    setPrimaryTherapistId(
-                      selectedTherapistIds.includes(therapist.id) && selectedTherapistIds.length === 1
-                        ? 'all'
-                        : therapist.id,
-                    );
-                  }}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
-                    selectedTherapistIds.includes(therapist.id)
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'hover:bg-slate-50',
-                  )}
-                >
-                  <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: getTherapistColor(therapist.colorCode) }}
-                  />
-                  {getTherapistName(therapist)}
-                </button>
-              ))}
+          {!lockedTherapistId && (
+            <div className="rounded-lg border bg-white p-3 shadow-sm">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Quick filter
+                </p>
+                {hasActiveFilters && (
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleClearFilters}>
+                    Clear filters
+                  </Button>
+                )}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-slate-700">Therapist</p>
+                  <Select value={filterTherapistId} onValueChange={setFilterTherapistId}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="All therapists" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL_VALUE}>All therapists</SelectItem>
+                      {therapists.map((therapist) => (
+                        <SelectItem key={therapist.id} value={therapist.id}>
+                          {getTherapistName(therapist)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-slate-700">Room</p>
+                  <Select value={filterRoomId} onValueChange={setFilterRoomId}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="All rooms" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL_VALUE}>All rooms</SelectItem>
+                      {rooms.map((room) => (
+                        <SelectItem key={room.id} value={room.id}>
+                          {room.name}
+                          {room.code ? ` (${room.code})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
           )}
 
-          {loading ? (
+          {initialLoading && bookings.length === 0 ? (
             <div className="rounded-lg border p-12 text-center text-sm text-muted-foreground">
               Loading schedule…
             </div>
@@ -444,7 +438,7 @@ export function BookingCalendar({
         dayBookings={bookings}
         booking={formMode === 'edit' ? selectedBooking : null}
         prefill={slotPrefill}
-        onSuccess={() => void loadData()}
+        onSuccess={() => void loadData({ background: true })}
       />
 
       <BookingRescheduleModal
@@ -457,7 +451,7 @@ export function BookingCalendar({
           if (newStartTime) {
             setSelectedDate(new Date(newStartTime));
           }
-          void loadData();
+          void loadData({ background: true });
         }}
       />
 

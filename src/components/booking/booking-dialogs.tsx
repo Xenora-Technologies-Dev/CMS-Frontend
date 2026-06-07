@@ -84,7 +84,7 @@ export function BookingFormDialog({
   showTimeField = true,
   onSubmit,
 }: BookingFormDialogProps) {
-  const timeSlots = generateTimeSlots(8, 18, 15);
+  const timeSlots = generateTimeSlots(0, 24, 15);
   const [patientId, setPatientId] = useState('');
   const [therapistId, setTherapistId] = useState('');
   const [roomId, setRoomId] = useState('');
@@ -290,7 +290,7 @@ export function RescheduleBookingDialog({
   initialValues,
   onSubmit,
 }: RescheduleBookingDialogProps) {
-  const timeSlots = generateTimeSlots(8, 18, 15);
+  const timeSlots = generateTimeSlots(0, 24, 15);
   const [dateValue, setDateValue] = useState('');
   const [therapistId, setTherapistId] = useState(initialValues.therapistId);
   const [roomId, setRoomId] = useState(initialValues.roomId);

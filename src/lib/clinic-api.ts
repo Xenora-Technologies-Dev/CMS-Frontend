@@ -1,5 +1,10 @@
 import { apiRequest } from './api';
 
+export interface ClinicSettings {
+  autoDownloadSlips: boolean;
+  allowBookingOutsideConsultationHours: boolean;
+}
+
 export interface Clinic {
   id: string;
   name: string;
@@ -10,6 +15,7 @@ export interface Clinic {
   phone?: string | null;
   email?: string | null;
   timezone?: string;
+  settings?: ClinicSettings;
 }
 
 export interface UpdateClinicPayload {
@@ -21,6 +27,17 @@ export interface UpdateClinicPayload {
   phone?: string | null;
   email?: string | null;
   timezone?: string;
+  settings?: Partial<ClinicSettings>;
+}
+
+export function isAutoDownloadSlipsEnabled(clinic: Clinic | null | undefined): boolean {
+  return clinic?.settings?.autoDownloadSlips !== false;
+}
+
+export function isAllowBookingOutsideConsultationHoursEnabled(
+  clinic: Clinic | null | undefined,
+): boolean {
+  return clinic?.settings?.allowBookingOutsideConsultationHours === true;
 }
 
 export async function getCurrentClinic(): Promise<{ clinic: Clinic }> {

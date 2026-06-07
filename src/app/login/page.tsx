@@ -8,6 +8,7 @@ import { login } from '@/lib/booking-api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AppVersion } from '@/components/shared/app-version';
 import { Stethoscope } from 'lucide-react';
 
 export default function LoginPage() {
@@ -57,6 +58,7 @@ export default function LoginPage() {
               </div>
               <h1 className="text-2xl font-bold tracking-tight">CliniqFlow</h1>
               <p className="mt-1.5 text-sm text-blue-100">Clinic Therapy & Appointment Management</p>
+              <p className="mt-2 text-xs text-blue-200/80">Version 1.5</p>
             </div>
 
             <div className="px-8 py-8">
@@ -104,7 +106,8 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <footer className="relative py-6 text-center">
+      <footer className="relative space-y-1 py-6 text-center">
+        <AppVersion />
         <p className="text-xs text-muted-foreground">
           Design and Developed by{' '}
           <span className="font-semibold tracking-wide text-slate-700">XENORA</span>

@@ -17,10 +17,19 @@ export interface ActivityItem {
   type: 'booking' | 'cancel' | 'complete' | 'create';
 }
 
+export interface TypedBookings {
+  therapy: Booking[];
+  consultation: Booking[];
+}
+
 export interface AdminDashboardData {
   stats: DashboardStats;
   todayBookings: Booking[];
+  todayByType: TypedBookings;
+  pendingConfirmationToday: Booking[];
+  pendingConfirmationOlder: Booking[];
   upcoming: Booking[];
+  upcomingByType: TypedBookings;
   activity: ActivityItem[];
 }
 
@@ -37,20 +46,48 @@ function filterTodaysBookings(bookings: Booking[]): Booking[] {
     .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 }
 
-function deriveUpcomingBookings(bookings: Booking[], limit = 8): Booking[] {
+function splitByBookingType(bookings: Booking[]): TypedBookings {
+  return {
+    therapy: bookings.filter((b) => b.bookingType !== 'CONSULTATION'),
+    consultation: bookings.filter((b) => b.bookingType === 'CONSULTATION'),
+  };
+}
+
+function deriveUpcomingBookings(bookings: Booking[]): Booking[] {
   const now = new Date();
 
   return bookings
     .filter((b) => ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS'].includes(b.status))
     .filter((b) => new Date(b.startTime) > now)
-    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-    .slice(0, limit);
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 }
 
-function deriveRecentActivity(bookings: Booking[], limit = 10): ActivityItem[] {
+function derivePendingConfirmation(bookings: Booking[], scope: 'today' | 'older'): Booking[] {
+  const todayStart = startOfDay(new Date()).getTime();
+  const todayEnd = endOfDay(new Date()).getTime();
+
+  return bookings
+    .filter((b) => b.status === 'PENDING_CONFIRMATION')
+    .filter((b) => {
+      const start = new Date(b.startTime).getTime();
+      if (scope === 'today') {
+        return start >= todayStart && start <= todayEnd;
+      }
+      return start < todayStart || start > todayEnd;
+    })
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+}
+
+function deriveRecentActivity(bookings: Booking[], limit = 5): ActivityItem[] {
   const items: ActivityItem[] = bookings.map((booking) => {
     const patient = `${booking.patient.firstName} ${booking.patient.lastName}`;
-    const time = `${booking.therapy?.name ?? 'Appointment'} · ${new Date(booking.startTime).toLocaleString('en-GB', {
+    const label =
+      booking.bookingType === 'CONSULTATION'
+        ? booking.doctor
+          ? `Dr. ${booking.doctor.user.firstName} ${booking.doctor.user.lastName}`
+          : 'Consultation'
+        : (booking.therapy?.name ?? 'Appointment');
+    const time = `${label} · ${new Date(booking.startTime).toLocaleString('en-GB', {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
@@ -122,6 +159,9 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
     return start >= todayStart && start <= todayEnd;
   });
 
+  const todayBookings = filterTodaysBookings(todaysBookingsRaw);
+  const upcoming = deriveUpcomingBookings(allBookings);
+
   return {
     stats: {
       totalPatients,
@@ -129,8 +169,12 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
       todaysBookings: countTodaysActiveBookings(todaysBookingsRaw),
       pendingLeaveRequests,
     },
-    todayBookings: filterTodaysBookings(todaysBookingsRaw),
-    upcoming: deriveUpcomingBookings(allBookings),
+    todayBookings,
+    todayByType: splitByBookingType(todayBookings),
+    pendingConfirmationToday: derivePendingConfirmation(allBookings, 'today'),
+    pendingConfirmationOlder: derivePendingConfirmation(allBookings, 'older'),
+    upcoming,
+    upcomingByType: splitByBookingType(upcoming),
     activity: deriveRecentActivity(allBookings),
   };
 }

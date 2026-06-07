@@ -42,8 +42,7 @@ function splitTherapistBookings(bookings: Booking[]): {
   const upcoming = bookings
     .filter((b) => ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS'].includes(b.status))
     .filter((b) => new Date(b.startTime) > now)
-    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-    .slice(0, 8);
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
   return { todayBookings, upcoming };
 }
