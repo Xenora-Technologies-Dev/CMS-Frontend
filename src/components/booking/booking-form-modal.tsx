@@ -57,10 +57,12 @@ import {
 import { fetchApprovedLeaves } from '@/lib/leave-api';
 import { useToast } from '@/components/providers/toast-provider';
 import { getFriendlyErrorMessage } from '@/lib/error-utils';
-import { ProgressDialog } from '@/components/shared/progress-dialog';
-import { useProgressAction } from '@/hooks/use-progress-action';
-import { PackageSelectionPanel, type PackageChoice } from '@/components/booking/package-selection-panel';
-import { getActiveTreatmentPlan } from '@/lib/treatment-plan-api';
+import {
+  getLastTherapistIdFromPlan,
+  PackageConfigPanel,
+  PatientPackagesPanel,
+} from '@/components/booking/package-selection-panel';
+import { getActivePatientPackages } from '@/lib/treatment-plan-api';
 import type { Booking, Patient, Room, Therapist, Therapy, TreatmentPlan } from '@/lib/types';
 import {
   combineDateAndTime,
@@ -124,8 +126,8 @@ export function BookingFormModal({
   prefill,
   onSuccess,
 }: BookingFormModalProps) {
-  const { progress, run } = useProgressAction();
   const { showBookingSuccess } = useToast();
+  const [confirming, setConfirming] = useState(false);
   const clinicContext = useClinicOptional();
   const overrideScheduleConstraints = isAllowBookingOutsideConsultationHoursEnabled(
     clinicContext?.clinic,
@@ -133,7 +135,7 @@ export function BookingFormModal({
   const [step, setStep] = useState<'form' | 'summary'>('form');
   const [reviewing, setReviewing] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const actionBusy = reviewing || progress.open;
+  const actionBusy = reviewing || confirming;
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [availability, setAvailability] = useState<
     import('@/lib/types').TherapistAvailability[]
@@ -146,9 +148,12 @@ export function BookingFormModal({
   const slotsRefreshRequestIdRef = useRef(0);
   const slotsBackgroundRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [quickAddPatientOpen, setQuickAddPatientOpen] = useState(false);
-  const [activeTreatmentPlan, setActiveTreatmentPlan] = useState<TreatmentPlan | null>(null);
-  const [packageLoading, setPackageLoading] = useState(false);
-  const [packageChoice, setPackageChoice] = useState<PackageChoice>(null);
+  const [patientPackages, setPatientPackages] = useState<TreatmentPlan[]>([]);
+  const [packagesLoading, setPackagesLoading] = useState(false);
+  const [continuingPlanId, setContinuingPlanId] = useState<string | null>(null);
+  const [isPackage, setIsPackage] = useState(false);
+  const [packageSessions, setPackageSessions] = useState('');
+  const [packageValidityDays, setPackageValidityDays] = useState('365');
   const dayBookingsRef = useRef(dayBookings);
   dayBookingsRef.current = dayBookings;
 
@@ -168,7 +173,8 @@ export function BookingFormModal({
 
   const watched = form.watch();
   const selectedTherapy = therapies.find((t) => t.id === watched.therapyId);
-  const isPackageTherapy = Boolean(selectedTherapy?.isPackageBased);
+  const continuingPlan = patientPackages.find((p) => p.id === continuingPlanId) ?? null;
+  const isContinuingPackage = Boolean(continuingPlanId && continuingPlan);
   const selectedTherapist = therapists.find((t) => t.id === watched.therapistId);
   const selectedRoom = rooms.find((r) => r.id === watched.roomId);
 
@@ -289,10 +295,11 @@ export function BookingFormModal({
     !hasBlockingIssues &&
     Boolean(selectedTherapy?.durationMinutes) &&
     Boolean(watched.roomId || mode === 'edit') &&
-    (!isPackageTherapy ||
-      mode === 'edit' ||
-      packageChoice === 'continue' ||
-      packageChoice === 'new');
+    (mode === 'edit' ||
+      isContinuingPackage ||
+      !isPackage ||
+      (Boolean(packageSessions.trim()) &&
+        Number.parseInt(packageSessions, 10) >= 1));
 
   const resetForm = useCallback(() => {
     const baseDate = prefill?.date ?? defaultDate;
@@ -321,6 +328,7 @@ export function BookingFormModal({
     }
     setStep('form');
     setReviewing(false);
+    setConfirming(false);
     setSubmitError(null);
     setAvailability([]);
     setPreviewBookings(dayBookingsRef.current);
@@ -332,9 +340,12 @@ export function BookingFormModal({
       clearTimeout(slotsBackgroundRefreshTimerRef.current);
       slotsBackgroundRefreshTimerRef.current = null;
     }
-    setActiveTreatmentPlan(null);
-    setPackageChoice(null);
-    setPackageLoading(false);
+    setPatientPackages([]);
+    setPackagesLoading(false);
+    setContinuingPlanId(null);
+    setIsPackage(false);
+    setPackageSessions('');
+    setPackageValidityDays('365');
   }, [mode, booking, prefill, defaultDate, form]);
 
   const loadSlotSchedule = useCallback(async () => {
@@ -449,36 +460,60 @@ export function BookingFormModal({
   }, [watched.patientId, mode, booking]);
 
   useEffect(() => {
-    if (!open || mode !== 'create' || !watched.patientId || !watched.therapyId || !isPackageTherapy) {
-      setActiveTreatmentPlan(null);
-      setPackageChoice(null);
+    if (!open || mode !== 'create' || !watched.patientId) {
+      setPatientPackages([]);
+      setContinuingPlanId(null);
       return;
     }
     let cancelled = false;
-    setPackageLoading(true);
-    void getActiveTreatmentPlan(watched.patientId, watched.therapyId)
-      .then(({ treatmentPlan }) => {
+    setPackagesLoading(true);
+    void getActivePatientPackages(watched.patientId)
+      .then(({ treatmentPlans }) => {
         if (cancelled) return;
-        setActiveTreatmentPlan(treatmentPlan);
-        if (treatmentPlan) {
-          setPackageChoice(null);
-        } else {
-          setPackageChoice('new');
-        }
+        setPatientPackages(treatmentPlans);
       })
       .catch(() => {
-        if (!cancelled) {
-          setActiveTreatmentPlan(null);
-          setPackageChoice('new');
-        }
+        if (!cancelled) setPatientPackages([]);
       })
       .finally(() => {
-        if (!cancelled) setPackageLoading(false);
+        if (!cancelled) setPackagesLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [open, mode, watched.patientId, watched.therapyId, isPackageTherapy]);
+  }, [open, mode, watched.patientId]);
+
+  const handleContinuePackage = useCallback(
+    (plan: TreatmentPlan | null) => {
+      if (!plan) {
+        setContinuingPlanId(null);
+        return;
+      }
+      setContinuingPlanId(plan.id);
+      setIsPackage(false);
+      setPackageSessions('');
+      form.setValue('therapyId', plan.therapyId, { shouldValidate: true });
+      const therapistId = getLastTherapistIdFromPlan(plan);
+      if (therapistId) {
+        form.setValue('therapistId', therapistId, { shouldValidate: true });
+      }
+    },
+    [form],
+  );
+
+  useEffect(() => {
+    if (!open || mode !== 'create' || isContinuingPackage || !watched.therapyId) return;
+    const existingForTherapy = patientPackages.some((p) => p.therapyId === watched.therapyId);
+    if (selectedTherapy?.isPackageBased && !existingForTherapy) {
+      setIsPackage(true);
+      if (selectedTherapy.packageSessions) {
+        setPackageSessions(String(selectedTherapy.packageSessions));
+      }
+      if (selectedTherapy.packageValidityDays) {
+        setPackageValidityDays(String(selectedTherapy.packageValidityDays));
+      }
+    }
+  }, [open, mode, isContinuingPackage, watched.therapyId, selectedTherapy, patientPackages]);
 
   useEffect(() => {
     if (!open || !scheduleReady) return;
@@ -565,10 +600,15 @@ export function BookingFormModal({
         startTime: startIso,
         notes: values.notes?.trim() || undefined,
         overrideScheduleConstraints,
-        ...(packageChoice === 'continue' && activeTreatmentPlan
-          ? { treatmentPlanId: activeTreatmentPlan.id }
+        ...(continuingPlanId ? { treatmentPlanId: continuingPlanId } : {}),
+        ...(isPackage && !continuingPlanId
+          ? {
+              createNewPackage: true,
+              packageSessions: Number.parseInt(packageSessions, 10),
+              packageValidityDays:
+                Number.parseInt(packageValidityDays, 10) || 365,
+            }
           : {}),
-        ...(packageChoice === 'new' ? { createNewPackage: true } : {}),
       });
       return created;
     }
@@ -619,13 +659,12 @@ export function BookingFormModal({
   }
 
   async function handleConfirm() {
-    if (progress.open) return;
+    if (confirming) return;
     setSubmitError(null);
 
-    const freshBookings = scheduleReady ? await loadSlotSchedule() : previewBookings;
     const confirmInput: SlotValidationInput = {
       ...slotPreviewInput,
-      dayBookings: freshBookings,
+      dayBookings: previewBookings,
     };
     const issues = validateBookingSlot(confirmInput, validationOptions);
     if (hasBlockingSlotIssues(issues, validationOptions)) {
@@ -634,21 +673,18 @@ export function BookingFormModal({
       return;
     }
 
+    setConfirming(true);
     try {
-      await run(
-        mode === 'create' ? 'Creating booking…' : 'Saving changes…',
-        async () => {
-          const saved = await persistBooking();
-          onOpenChange(false);
-          onSuccess();
-          if (mode === 'create' && saved) {
-            showBookingSuccess(saved);
-          }
-        },
-        mode === 'create' ? 'Saving booking…' : 'Updating calendar and records',
-      );
+      const saved = await persistBooking();
+      onOpenChange(false);
+      if (mode === 'create' && saved) {
+        showBookingSuccess(saved);
+      }
+      onSuccess();
     } catch (err) {
       setSubmitError(getFriendlyErrorMessage(err, 'Failed to save booking'));
+    } finally {
+      setConfirming(false);
     }
   }
 
@@ -661,7 +697,10 @@ export function BookingFormModal({
         try {
           let freshBookings = previewBookings;
           if (scheduleReady) {
-            freshBookings = await loadSlotSchedule();
+            const scheduleKey = `${watched.therapistId}:${watched.date}`;
+            if (slotsLoadedForKeyRef.current !== scheduleKey) {
+              freshBookings = await loadSlotSchedule();
+            }
             const reviewIssues = validateBookingSlot(
               { ...slotPreviewInput, dayBookings: freshBookings },
               validationOptions,
@@ -747,9 +786,9 @@ export function BookingFormModal({
                 type="button"
                 onClick={() => void handleConfirm()}
                 disabled={actionBusy}
-                aria-busy={progress.open}
+                aria-busy={confirming}
               >
-                {progress.open ? (
+                {confirming ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     {mode === 'create' ? 'Creating…' : 'Saving…'}
@@ -798,6 +837,15 @@ export function BookingFormModal({
                 )}
               />
 
+              {mode === 'create' && watched.patientId && (
+                <PatientPackagesPanel
+                  plans={patientPackages}
+                  loading={packagesLoading}
+                  selectedPlanId={continuingPlanId}
+                  onSelectPlan={handleContinuePackage}
+                />
+              )}
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -838,7 +886,16 @@ export function BookingFormModal({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Therapy</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          if (continuingPlanId && value !== continuingPlan?.therapyId) {
+                            setContinuingPlanId(null);
+                          }
+                        }}
+                        value={field.value}
+                        disabled={isContinuingPackage}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select therapy" />
@@ -858,12 +915,15 @@ export function BookingFormModal({
                 />
               </div>
 
-              {mode === 'create' && watched.patientId && isPackageTherapy && (
-                <PackageSelectionPanel
-                  plan={activeTreatmentPlan}
-                  loading={packageLoading}
-                  choice={packageChoice}
-                  onChoiceChange={setPackageChoice}
+              {mode === 'create' && watched.therapyId && !isContinuingPackage && (
+                <PackageConfigPanel
+                  isPackage={isPackage}
+                  onIsPackageChange={setIsPackage}
+                  sessions={packageSessions}
+                  onSessionsChange={setPackageSessions}
+                  validityDays={packageValidityDays}
+                  onValidityDaysChange={setPackageValidityDays}
+                  defaultSessions={selectedTherapy?.packageSessions}
                 />
               )}
 
@@ -1013,11 +1073,6 @@ export function BookingFormModal({
         }}
       />
 
-      <ProgressDialog
-        open={progress.open}
-        title={progress.title}
-        description={progress.description}
-      />
     </>
   );
 }

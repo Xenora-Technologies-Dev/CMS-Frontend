@@ -262,7 +262,7 @@ export function CreateConsultationBookingModal({
       });
       onOpenChange(false);
       showBookingSuccess(booking);
-      onSuccess();
+      void onSuccess();
     } catch (err) {
       setError(getFriendlyErrorMessage(err, 'Failed to create consultation booking'));
     } finally {

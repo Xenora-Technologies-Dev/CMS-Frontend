@@ -36,6 +36,15 @@ export async function getActiveTreatmentPlan(
   );
 }
 
+export async function getActivePatientPackages(
+  patientId: string,
+): Promise<{ treatmentPlans: TreatmentPlan[] }> {
+  const qs = new URLSearchParams({ patientId });
+  return apiRequest<{ treatmentPlans: TreatmentPlan[] }>(
+    `/treatment-plans/active-for-patient?${qs.toString()}`,
+  );
+}
+
 export async function getTreatmentPlan(id: string): Promise<{ treatmentPlan: TreatmentPlan }> {
   return apiRequest<{ treatmentPlan: TreatmentPlan }>(`/treatment-plans/${id}`);
 }

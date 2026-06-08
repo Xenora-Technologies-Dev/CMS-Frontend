@@ -12,7 +12,6 @@ import { listPublicHolidays } from '@/lib/holiday-api';
 import type { Booking, PublicHoliday, Room, Therapist, Therapy } from '@/lib/types';
 import { endOfDay, startOfDay } from '@/lib/utils';
 import { cn, getTherapistName } from '@/lib/utils';
-import { BookingCardList } from '@/components/booking/booking-card';
 import { CalendarFilters } from '@/components/booking/calendar-filters';
 import {
   BookingDetailDialog,
@@ -395,15 +394,6 @@ export function BookingCalendar({
                 onPostponeBooking={openPostponeFromCard}
                 onCancelBooking={openCancelFromCard}
               />
-              <div className="md:hidden">
-                <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                  Bookings list
-                </h2>
-                <BookingCardList
-                  bookings={filteredBookings}
-                  onSelect={handleSelectBooking}
-                />
-              </div>
             </>
           )}
         </div>

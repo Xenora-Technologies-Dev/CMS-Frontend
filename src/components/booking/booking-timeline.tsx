@@ -138,7 +138,7 @@ export function BookingTimeline({
           {dayHolidays.map((h) => h.name).join(', ')}
         </div>
       )}
-      <div className="hidden md:block">
+      <div>
         <ScrollArea className="w-full">
           <div className="inline-flex min-w-full">
             <div className="sticky left-0 z-30 w-14 shrink-0 border-r bg-slate-50">
@@ -170,10 +170,10 @@ export function BookingTimeline({
             {rooms.map((room) => (
               <div
                 key={room.id}
-                className="relative shrink-0 border-r last:border-r-0"
+                className="relative shrink-0 border-r last:border-r-0 sm:min-w-[140px]"
                 style={{
-                  minWidth: CALENDAR_MIN_ROOM_COLUMN_WIDTH,
-                  flex: `1 0 ${CALENDAR_MIN_ROOM_COLUMN_WIDTH}px`,
+                  minWidth: 120,
+                  flex: '1 0 120px',
                 }}
               >
                 <div className="sticky top-0 z-20 flex h-12 flex-col justify-center border-b bg-slate-50 px-2">
@@ -252,9 +252,6 @@ export function BookingTimeline({
         </ScrollArea>
       </div>
 
-      <p className="border-t px-3 py-2 text-center text-[10px] text-muted-foreground md:hidden">
-        Use the list below on small screens, or rotate for the room grid view.
-      </p>
     </div>
   );
 }

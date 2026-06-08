@@ -214,6 +214,8 @@ export interface Therapy {
   code?: string | null;
   durationMinutes: number;
   isPackageBased?: boolean;
+  packageSessions?: number | null;
+  packageValidityDays?: number | null;
 }
 
 export interface TherapyDetail extends Therapy {
@@ -403,6 +405,8 @@ export interface CreateBookingPayload {
   overrideScheduleConstraints?: boolean;
   treatmentPlanId?: string;
   createNewPackage?: boolean;
+  packageSessions?: number;
+  packageValidityDays?: number;
 }
 
 export interface PublicHoliday {

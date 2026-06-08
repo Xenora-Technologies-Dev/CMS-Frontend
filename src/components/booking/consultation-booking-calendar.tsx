@@ -18,7 +18,6 @@ import {
   parseDateInput,
   startOfDay,
 } from '@/lib/utils';
-import { BookingCardList } from '@/components/booking/booking-card';
 import {
   BookingDetailDialog,
   CancelBookingDialog,
@@ -32,7 +31,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ChevronLeft, ChevronRight, Plus, RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/components/providers/toast-provider';
 import { useSocketEvent } from '@/components/providers/socket-provider';
 import { useClinicOptional } from '@/components/providers/clinic-provider';
@@ -60,8 +59,10 @@ export function ConsultationBookingCalendar({
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [holidays, setHolidays] = useState<PublicHoliday[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hasLoadedOnce = useRef(false);
 
   const [selectedDoctorIds, setSelectedDoctorIds] = useState<string[]>(
     lockedDoctorId ? [lockedDoctorId] : [],
@@ -95,44 +96,60 @@ export function ConsultationBookingCalendar({
     return rooms.filter((r) => selectedRoomIds.includes(r.id));
   }, [rooms, selectedRoomIds]);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [dayBookings, doctorResult, roomResult, holidayResult] = await Promise.all([
-        fetchBookingsForDate(selectedDate, RESOURCE_LIMIT, {
-          bookingType: 'CONSULTATION',
-          doctorId: lockedDoctorId,
-        }),
-        listDoctors({ limit: RESOURCE_LIMIT, isActive: true }),
-        listRooms({ limit: RESOURCE_LIMIT, isActive: true, roomType: 'CONSULTATION' }),
-        listPublicHolidays({
-          limit: RESOURCE_LIMIT,
-          dateFrom: startOfDay(selectedDate).toISOString(),
-          dateTo: endOfDay(selectedDate).toISOString(),
-        }),
-      ]);
-      setBookings(dayBookings);
-      setDoctors(
-        lockedDoctorId
-          ? doctorResult.data.filter((d) => d.id === lockedDoctorId)
-          : doctorResult.data,
-      );
-      setRooms(roomResult.data);
-      setHolidays(holidayResult.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load calendar data');
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedDate, lockedDoctorId]);
+  const loadData = useCallback(
+    async (options?: { background?: boolean }) => {
+      const isBackground = options?.background && hasLoadedOnce.current;
+      if (isBackground) {
+        setRefreshing(true);
+      } else if (!hasLoadedOnce.current) {
+        setInitialLoading(true);
+      } else {
+        setRefreshing(true);
+      }
+      setError(null);
+      try {
+        const [dayBookings, doctorResult, roomResult, holidayResult] = await Promise.all([
+          fetchBookingsForDate(selectedDate, RESOURCE_LIMIT, {
+            bookingType: 'CONSULTATION',
+            doctorId: lockedDoctorId,
+          }),
+          listDoctors({ limit: RESOURCE_LIMIT, isActive: true }),
+          listRooms({ limit: RESOURCE_LIMIT, isActive: true, roomType: 'CONSULTATION' }),
+          listPublicHolidays({
+            limit: RESOURCE_LIMIT,
+            dateFrom: startOfDay(selectedDate).toISOString(),
+            dateTo: endOfDay(selectedDate).toISOString(),
+          }),
+        ]);
+        setBookings(dayBookings);
+        setDoctors(
+          lockedDoctorId
+            ? doctorResult.data.filter((d) => d.id === lockedDoctorId)
+            : doctorResult.data,
+        );
+        setRooms(roomResult.data);
+        setHolidays(holidayResult.data);
+        hasLoadedOnce.current = true;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load calendar data');
+      } finally {
+        setInitialLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [selectedDate, lockedDoctorId],
+  );
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
 
   useSocketEvent(SocketEvents.BOOKING_UPDATED, () => {
-    void loadData();
+    void loadData({ background: true });
+  });
+
+  useSocketEvent(SocketEvents.SCHEDULE_UPDATED, () => {
+    void loadData({ background: true });
   });
 
   useEffect(() => {
@@ -193,14 +210,14 @@ export function ConsultationBookingCalendar({
       booking: updated,
       cancellationReason: reason || undefined,
     });
-    await loadData();
+    await loadData({ background: true });
   }
 
   async function handleComplete() {
     if (!selectedBooking) return;
     await completeBooking(selectedBooking.id);
     setDetailOpen(false);
-    await loadData();
+    await loadData({ background: true });
   }
 
   const dateLabel = selectedDate.toLocaleDateString('en-GB', {
@@ -230,7 +247,7 @@ export function ConsultationBookingCalendar({
             onClick={() => void loadData()}
             aria-label="Refresh"
           >
-            <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+            <RefreshCw className={cn('h-4 w-4', (initialLoading || refreshing) && 'animate-spin')} />
           </Button>
           {!lockedDoctorId && (
             <Button onClick={() => openCreate()} disabled={!resourcesReady}>
@@ -241,7 +258,7 @@ export function ConsultationBookingCalendar({
         </div>
       </div>
 
-      {!resourcesReady && !loading && (
+      {!resourcesReady && !initialLoading && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           Add at least one active doctor and consultation room before creating bookings.
         </div>
@@ -374,7 +391,7 @@ export function ConsultationBookingCalendar({
             </p>
           </div>
 
-          {loading ? (
+          {initialLoading && bookings.length === 0 ? (
             <div className="rounded-lg border p-12 text-center text-sm text-muted-foreground">
               Loading schedule…
             </div>
@@ -399,12 +416,6 @@ export function ConsultationBookingCalendar({
                   setCancelOpen(true);
                 }}
               />
-              <div className="md:hidden">
-                <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                  Bookings list
-                </h2>
-                <BookingCardList bookings={filteredBookings} onSelect={handleSelectBooking} />
-              </div>
             </>
           )}
         </div>
@@ -429,7 +440,7 @@ export function ConsultationBookingCalendar({
         doctors={doctors}
         rooms={rooms}
         prefill={slotPrefill}
-        onSuccess={() => void loadData()}
+        onSuccess={() => void loadData({ background: true })}
       />
 
       <CancelBookingDialog
