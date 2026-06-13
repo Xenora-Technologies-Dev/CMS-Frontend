@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ChevronLeft, ChevronRight, Plus, RefreshCw } from 'lucide-react';
+import { useDebouncedCallback } from '@/hooks/use-debounced-callback';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/components/providers/toast-provider';
 import { useSocketEvent } from '@/components/providers/socket-provider';
@@ -144,13 +145,13 @@ export function ConsultationBookingCalendar({
     void loadData();
   }, [loadData]);
 
-  useSocketEvent(SocketEvents.BOOKING_UPDATED, () => {
+  const debouncedBackgroundReload = useDebouncedCallback(() => {
     void loadData({ background: true });
-  });
+  }, 600);
 
-  useSocketEvent(SocketEvents.SCHEDULE_UPDATED, () => {
-    void loadData({ background: true });
-  });
+  useSocketEvent(SocketEvents.BOOKING_UPDATED, debouncedBackgroundReload);
+
+  useSocketEvent(SocketEvents.SCHEDULE_UPDATED, debouncedBackgroundReload);
 
   useEffect(() => {
     if (lockedDoctorId) {

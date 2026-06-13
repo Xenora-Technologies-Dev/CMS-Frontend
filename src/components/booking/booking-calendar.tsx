@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Plus, RefreshCw } from 'lucide-react';
+import { useDebouncedCallback } from '@/hooks/use-debounced-callback';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/components/providers/toast-provider';
 import { useSocketEvent } from '@/components/providers/socket-provider';
@@ -153,13 +154,13 @@ export function BookingCalendar({
     void loadData();
   }, [loadData]);
 
-  useSocketEvent(SocketEvents.BOOKING_UPDATED, () => {
+  const debouncedBackgroundReload = useDebouncedCallback(() => {
     void loadData({ background: true });
-  });
+  }, 600);
 
-  useSocketEvent(SocketEvents.SCHEDULE_UPDATED, () => {
-    void loadData({ background: true });
-  });
+  useSocketEvent(SocketEvents.BOOKING_UPDATED, debouncedBackgroundReload);
+
+  useSocketEvent(SocketEvents.SCHEDULE_UPDATED, debouncedBackgroundReload);
 
   useEffect(() => {
     if (lockedTherapistId) {
@@ -428,6 +429,12 @@ export function BookingCalendar({
         booking={formMode === 'edit' ? selectedBooking : null}
         prefill={slotPrefill}
         onSuccess={() => void loadData({ background: true })}
+        onTherapyCreated={(therapy) => {
+          setTherapies((prev) => {
+            if (prev.some((t) => t.id === therapy.id)) return prev;
+            return [...prev, therapy].sort((a, b) => a.name.localeCompare(b.name));
+          });
+        }}
       />
 
       <BookingRescheduleModal

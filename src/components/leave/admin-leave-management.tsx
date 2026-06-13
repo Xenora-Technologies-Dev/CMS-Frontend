@@ -36,6 +36,8 @@ import { listTherapists } from '@/lib/therapist-api';
 import { getFriendlyErrorMessage } from '@/lib/error-utils';
 import { formatDateTime, getTherapistName } from '@/lib/utils';
 import { Check, Loader2, X } from 'lucide-react';
+import { useBackgroundLoadState } from '@/hooks/use-background-load-state';
+import { useDebouncedCallback } from '@/hooks/use-debounced-callback';
 import { useCallback, useEffect, useState } from 'react';
 import { useSocketEvent } from '@/components/providers/socket-provider';
 import { SocketEvents } from '@/lib/socket-events';
@@ -52,15 +54,15 @@ export function AdminLeaveManagement() {
     total: 0,
     totalPages: 1,
   });
-  const [loading, setLoading] = useState(true);
+  const { initialLoading, refreshing, beginLoad, endLoad } = useBackgroundLoadState();
   const [error, setError] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
   const [rejectNotes, setRejectNotes] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options?: { background?: boolean }) => {
+    beginLoad(options);
     setError(null);
     try {
       const result = await listLeaveRequests({
@@ -73,9 +75,14 @@ export function AdminLeaveManagement() {
     } catch (err) {
       setError(getFriendlyErrorMessage(err, 'Failed to load leave requests'));
     } finally {
-      setLoading(false);
+      endLoad();
     }
-  }, [page, statusFilter]);
+  }, [page, statusFilter, beginLoad, endLoad]);
+
+  const debouncedBackgroundReload = useDebouncedCallback(
+    () => void load({ background: true }),
+    600,
+  );
 
   useEffect(() => {
     void load();
@@ -87,13 +94,9 @@ export function AdminLeaveManagement() {
     });
   }, []);
 
-  useSocketEvent<LeaveRequest>(SocketEvents.LEAVE_UPDATED, () => {
-    void load();
-  });
+  useSocketEvent<LeaveRequest>(SocketEvents.LEAVE_UPDATED, debouncedBackgroundReload);
 
-  useSocketEvent(SocketEvents.LEAVE_CONFLICT, () => {
-    void load();
-  });
+  useSocketEvent(SocketEvents.LEAVE_CONFLICT, debouncedBackgroundReload);
 
   async function handleApproveClick(leave: LeaveRequest) {
     setProcessingId(leave.id);
@@ -103,7 +106,7 @@ export function AdminLeaveManagement() {
         'Approving leave…',
         async () => {
           await approveLeaveRequest(leave.id);
-          await load();
+          await load({ background: true });
         },
         `Processing request for ${getTherapistName(leave.therapist)}`,
       );
@@ -123,7 +126,7 @@ export function AdminLeaveManagement() {
         await rejectLeaveRequest(rejectTarget.id, rejectNotes.trim());
         setRejectTarget(null);
         setRejectNotes('');
-        await load();
+        await load({ background: true });
       }, `Updating request for ${getTherapistName(rejectTarget.therapist)}`);
     } catch (err) {
       setError(getFriendlyErrorMessage(err, 'Failed to reject leave request'));
@@ -164,7 +167,7 @@ export function AdminLeaveManagement() {
             setStatusFilter(v as LeaveRequestStatus | 'ALL');
             setPage(1);
           }}
-          disabled={loading || progress.open}
+          disabled={initialLoading || refreshing || progress.open}
         >
           <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="Filter status" />
@@ -193,7 +196,7 @@ export function AdminLeaveManagement() {
           <CardTitle className="text-base">Leave Requests</CardTitle>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {initialLoading ? (
             <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading leave requests…
@@ -201,7 +204,7 @@ export function AdminLeaveManagement() {
           ) : leaves.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">No leave requests found</p>
           ) : (
-            <div className="space-y-3">
+            <div className={`space-y-3 transition-opacity ${refreshing ? 'opacity-60' : ''}`}>
               {leaves.map((leave) => {
                 const isProcessing = processingId === leave.id;
                 return (

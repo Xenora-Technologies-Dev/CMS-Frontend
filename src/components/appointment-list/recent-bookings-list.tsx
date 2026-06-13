@@ -16,6 +16,8 @@ import { listTherapists } from '@/lib/therapist-api';
 import { formatDateTime, formatUserName } from '@/lib/appointment-list-utils';
 import type { Booking, BookingStatus, PaginatedMeta, Therapist } from '@/lib/types';
 import { getPatientName, getTherapistName, parseDateInput, startOfDay, endOfDay } from '@/lib/utils';
+import { useBackgroundLoadState } from '@/hooks/use-background-load-state';
+import { useDebouncedCallback } from '@/hooks/use-debounced-callback';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useSocketEvent } from '@/components/providers/socket-provider';
 import { SocketEvents } from '@/lib/socket-events';
@@ -29,7 +31,7 @@ export function RecentBookingsList() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [meta, setMeta] = useState<PaginatedMeta>(DEFAULT_META);
   const [therapists, setTherapists] = useState<Therapist[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { initialLoading, refreshing, beginLoad, endLoad } = useBackgroundLoadState();
   const [error, setError] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
@@ -47,8 +49,8 @@ export function RecentBookingsList() {
   const debouncedTherapistName = useDebouncedValue(therapistName);
   const debouncedTherapyName = useDebouncedValue(therapyName);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options?: { background?: boolean }) => {
+    beginLoad(options);
     setError(null);
     try {
       const result = await listRecentBookings({
@@ -68,7 +70,7 @@ export function RecentBookingsList() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load recent bookings');
     } finally {
-      setLoading(false);
+      endLoad();
     }
   }, [
     page,
@@ -80,7 +82,14 @@ export function RecentBookingsList() {
     therapistId,
     status,
     dateFilter,
+    beginLoad,
+    endLoad,
   ]);
+
+  const debouncedBackgroundReload = useDebouncedCallback(
+    () => void load({ background: true }),
+    600,
+  );
 
   useEffect(() => {
     void listTherapists({ limit: 100, isActive: true }).then((result) => {
@@ -92,7 +101,7 @@ export function RecentBookingsList() {
     void load();
   }, [load]);
 
-  useSocketEvent(SocketEvents.BOOKING_UPDATED, () => void load());
+  useSocketEvent(SocketEvents.BOOKING_UPDATED, debouncedBackgroundReload);
 
   return (
     <div className="space-y-6">
@@ -237,7 +246,7 @@ export function RecentBookingsList() {
       )}
 
       <div className="overflow-hidden rounded-lg border">
-        {loading ? (
+        {initialLoading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading recent bookings…
@@ -245,7 +254,7 @@ export function RecentBookingsList() {
         ) : bookings.length === 0 ? (
           <p className="py-16 text-center text-sm text-muted-foreground">No recent bookings found</p>
         ) : (
-          <div className="divide-y">
+          <div className={`divide-y transition-opacity ${refreshing ? 'opacity-60' : ''}`}>
             {bookings.map((booking) => (
               <div key={booking.id} className="space-y-2 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">

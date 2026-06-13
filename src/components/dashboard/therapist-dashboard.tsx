@@ -16,6 +16,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SocketEvents } from '@/lib/socket-events';
 import { Bell, CalendarDays, Palmtree, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
+import { useBackgroundLoadState } from '@/hooks/use-background-load-state';
+import { useDebouncedCallback } from '@/hooks/use-debounced-callback';
 import { useCallback, useEffect, useState } from 'react';
 
 export function TherapistDashboard() {
@@ -26,16 +28,16 @@ export function TherapistDashboard() {
   const [todayBookings, setTodayBookings] = useState<Booking[]>([]);
   const [upcoming, setUpcoming] = useState<Booking[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { initialLoading, refreshing, beginLoad, endLoad } = useBackgroundLoadState();
   const [errors, setErrors] = useState<string[]>([]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { background?: boolean }) => {
     if (!therapistId) {
-      setLoading(false);
+      endLoad();
       return;
     }
 
-    setLoading(true);
+    beginLoad(options);
     setErrors([]);
 
     try {
@@ -46,21 +48,21 @@ export function TherapistDashboard() {
     } catch {
       setErrors(['Could not load dashboard data']);
     } finally {
-      setLoading(false);
+      endLoad();
     }
-  }, [therapistId]);
+  }, [therapistId, beginLoad, endLoad]);
+
+  const debouncedBackgroundReload = useDebouncedCallback(() => {
+    if (therapistId) void load({ background: true });
+  }, 600);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  useSocketEvent(SocketEvents.BOOKING_UPDATED, () => {
-    if (therapistId) void load();
-  });
+  useSocketEvent(SocketEvents.BOOKING_UPDATED, debouncedBackgroundReload);
 
-  useSocketEvent(SocketEvents.SCHEDULE_UPDATED, () => {
-    if (therapistId) void load();
-  });
+  useSocketEvent(SocketEvents.SCHEDULE_UPDATED, debouncedBackgroundReload);
 
   useSocketEvent<LeaveRequest>(SocketEvents.LEAVE_UPDATED, (leave) => {
     if (leave.therapistId !== therapistId) return;
@@ -73,7 +75,7 @@ export function TherapistDashboard() {
   const activeLeave = leaves.find((l) => l.status === 'APPROVED');
   const pendingLeave = leaves.find((l) => l.status === 'PENDING');
 
-  if (!therapistId && !loading) {
+  if (!therapistId && !initialLoading) {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
         Your account is not linked to a therapist profile. Contact your administrator to complete
@@ -90,8 +92,13 @@ export function TherapistDashboard() {
           <p className="text-sm text-muted-foreground">Your schedule and updates for today</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void load({ background: true })}
+            disabled={refreshing}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
           <Button size="sm" asChild>

@@ -27,6 +27,8 @@ import { listTherapists } from '@/lib/therapist-api';
 import { listTherapies } from '@/lib/therapy-api';
 import type { Booking, Doctor, PaginatedMeta, Room, Therapist, Therapy } from '@/lib/types';
 import { parseDateInput, startOfDay, endOfDay } from '@/lib/utils';
+import { useBackgroundLoadState } from '@/hooks/use-background-load-state';
+import { useDebouncedCallback } from '@/hooks/use-debounced-callback';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useToast } from '@/components/providers/toast-provider';
 import { useCallback, useEffect, useState } from 'react';
@@ -47,7 +49,7 @@ export function AppointmentList() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [therapies, setTherapies] = useState<Therapy[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { initialLoading, refreshing, beginLoad, endLoad } = useBackgroundLoadState();
   const [error, setError] = useState<string | null>(null);
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -73,8 +75,8 @@ export function AppointmentList() {
     setTherapies(therapyResult.data);
   }, []);
 
-  const loadBookings = useCallback(async () => {
-    setLoading(true);
+  const loadBookings = useCallback(async (options?: { background?: boolean }) => {
+    beginLoad(options);
     setError(null);
     try {
       const params = {
@@ -103,7 +105,7 @@ export function AppointmentList() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load appointments');
     } finally {
-      setLoading(false);
+      endLoad();
     }
   }, [
     page,
@@ -115,14 +117,21 @@ export function AppointmentList() {
     filters.statusGroup,
     filters.dateFrom,
     filters.dateTo,
+    beginLoad,
+    endLoad,
   ]);
+
+  const debouncedBackgroundReload = useDebouncedCallback(
+    () => void loadBookings({ background: true }),
+    600,
+  );
 
   useEffect(() => {
     void loadResources();
   }, [loadResources]);
 
   useEffect(() => {
-    void loadBookings();
+    void loadBookings({ background: false });
   }, [loadBookings]);
 
   useEffect(() => {
@@ -137,9 +146,7 @@ export function AppointmentList() {
     filters.dateTo,
   ]);
 
-  useSocketEvent(SocketEvents.BOOKING_UPDATED, () => {
-    void loadBookings();
-  });
+  useSocketEvent(SocketEvents.BOOKING_UPDATED, debouncedBackgroundReload);
 
   function handleView(booking: Booking) {
     setSelectedBooking(booking);
@@ -173,7 +180,7 @@ export function AppointmentList() {
       booking: updated,
       cancellationReason: reason || undefined,
     });
-    await loadBookings();
+    await loadBookings({ background: true });
   }
 
   async function handleRestore(booking: Booking) {
@@ -182,7 +189,7 @@ export function AppointmentList() {
     setProcessingBookingId(booking.id);
     try {
       await restoreBooking(booking.id);
-      await loadBookings();
+      await loadBookings({ background: true });
     } finally {
       setProcessingBookingId(null);
     }
@@ -194,7 +201,7 @@ export function AppointmentList() {
     setProcessingBookingId(booking.id);
     try {
       await completeBooking(booking.id);
-      await loadBookings();
+      await loadBookings({ background: true });
     } finally {
       setProcessingBookingId(null);
     }
@@ -202,15 +209,17 @@ export function AppointmentList() {
 
   return (
     <div className="space-y-4">
-      <BookingsNeedsAttentionPanel onActionComplete={() => void loadBookings()} />
+      <BookingsNeedsAttentionPanel
+        onActionComplete={() => void loadBookings({ background: true })}
+      />
 
       <AppointmentListFilters
         filters={filters}
         therapists={therapists}
         therapies={therapies}
-        loading={loading}
+        loading={refreshing}
         onChange={setFilters}
-        onRefresh={() => void loadBookings()}
+        onRefresh={() => void loadBookings({ background: true })}
         onClear={() => setFilters(DEFAULT_APPOINTMENT_FILTERS)}
       />
 
@@ -220,7 +229,7 @@ export function AppointmentList() {
         </div>
       )}
 
-      {loading ? (
+      {initialLoading ? (
         <div className="rounded-xl border p-12 text-center text-sm text-muted-foreground">
           Loading appointments…
         </div>
@@ -229,7 +238,9 @@ export function AppointmentList() {
           No appointments match your filters.
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
+        <div
+          className={`grid gap-4 md:grid-cols-2 xl:grid-cols-1 transition-opacity ${refreshing ? 'opacity-60' : ''}`}
+        >
           {bookings.map((booking) => (
             <AppointmentListCard
               key={booking.id}
@@ -299,7 +310,7 @@ export function AppointmentList() {
         therapies={therapies}
         dayBookings={bookings}
         booking={selectedBooking}
-        onSuccess={() => void loadBookings()}
+        onSuccess={() => void loadBookings({ background: true })}
       />
 
       <BookingRescheduleModal
@@ -309,7 +320,7 @@ export function AppointmentList() {
         therapists={therapists}
         doctors={doctors}
         rooms={rooms}
-        onSuccess={() => void loadBookings()}
+        onSuccess={() => void loadBookings({ background: true })}
       />
 
       <CancelBookingDialog

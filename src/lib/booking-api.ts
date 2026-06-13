@@ -222,6 +222,47 @@ export async function fetchTherapies(limit = 100): Promise<Therapy[]> {
   return result.data;
 }
 
+export interface TherapySearchResult {
+  therapies: Therapy[];
+  hasMore: boolean;
+  total: number;
+}
+
+const THERAPY_SEARCH_PAGE_SIZE = 50;
+
+/** Minimum characters before searching (1 for numeric code queries). */
+export function getTherapySearchMinLength(query: string): number {
+  const trimmed = query.trim();
+  if (/^\d+$/.test(trimmed)) return 1;
+  return 2;
+}
+
+export async function searchTherapies(
+  query: string,
+  page = 1,
+  limit = THERAPY_SEARCH_PAGE_SIZE,
+): Promise<TherapySearchResult> {
+  const trimmed = query.trim();
+  const params = new URLSearchParams({
+    limit: String(limit),
+    page: String(page),
+    isActive: 'true',
+  });
+  if (trimmed) params.set('search', trimmed);
+
+  const cacheKey = `therapy-search:${trimmed}:${page}:${limit}`;
+  const result = await dedupeRequest(cacheKey, () =>
+    apiRequestPaginated<Therapy>(`/therapies?${params.toString()}`),
+  );
+
+  const { page: currentPage, totalPages, total } = result.meta;
+  return {
+    therapies: result.data,
+    hasMore: currentPage < totalPages,
+    total,
+  };
+}
+
 export interface PatientSearchResult {
   patients: Patient[];
   hasMore: boolean;

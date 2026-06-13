@@ -3,7 +3,9 @@
 import { BookingSummary } from '@/components/booking/booking-summary';
 import { AvailableSlotsPicker } from '@/components/booking/available-slots-picker';
 import { PatientSearch } from '@/components/booking/patient-search';
+import { TherapySearch } from '@/components/booking/therapy-search';
 import { QuickAddPatientDialog } from '@/components/booking/quick-add-patient-dialog';
+import { QuickAddTherapyDialog } from '@/components/booking/quick-add-therapy-dialog';
 import { SlotOccupancyPreview } from '@/components/booking/slot-occupancy-preview';
 import { useClinicOptional } from '@/components/providers/clinic-provider';
 import { useSocketEvent } from '@/components/providers/socket-provider';
@@ -42,6 +44,7 @@ import {
   fetchTherapistAvailability,
   rescheduleBooking,
   searchPatients,
+  searchTherapies,
   updateBooking,
 } from '@/lib/booking-api';
 import {
@@ -67,7 +70,6 @@ import type { Booking, Patient, Room, Therapist, Therapy, TreatmentPlan } from '
 import {
   combineDateAndTime,
   formatDateInput,
-  formatDuration,
   formatTime,
   getPatientName,
   getTherapistColor,
@@ -111,6 +113,7 @@ interface BookingFormModalProps {
   booking?: Booking | null;
   prefill?: BookingSlotPrefill;
   onSuccess: () => void;
+  onTherapyCreated?: (therapy: Therapy) => void;
 }
 
 export function BookingFormModal({
@@ -125,6 +128,7 @@ export function BookingFormModal({
   booking,
   prefill,
   onSuccess,
+  onTherapyCreated,
 }: BookingFormModalProps) {
   const { showBookingSuccess } = useToast();
   const [confirming, setConfirming] = useState(false);
@@ -148,6 +152,8 @@ export function BookingFormModal({
   const slotsRefreshRequestIdRef = useRef(0);
   const slotsBackgroundRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [quickAddPatientOpen, setQuickAddPatientOpen] = useState(false);
+  const [quickAddTherapyOpen, setQuickAddTherapyOpen] = useState(false);
+  const [therapyOptions, setTherapyOptions] = useState<Therapy[]>(therapies);
   const [patientPackages, setPatientPackages] = useState<TreatmentPlan[]>([]);
   const [packagesLoading, setPackagesLoading] = useState(false);
   const [continuingPlanId, setContinuingPlanId] = useState<string | null>(null);
@@ -172,7 +178,7 @@ export function BookingFormModal({
   });
 
   const watched = form.watch();
-  const selectedTherapy = therapies.find((t) => t.id === watched.therapyId);
+  const selectedTherapy = therapyOptions.find((t) => t.id === watched.therapyId);
   const continuingPlan = patientPackages.find((p) => p.id === continuingPlanId) ?? null;
   const isContinuingPackage = Boolean(continuingPlanId && continuingPlan);
   const selectedTherapist = therapists.find((t) => t.id === watched.therapistId);
@@ -424,6 +430,10 @@ export function BookingFormModal({
   }, [open]);
 
   useEffect(() => {
+    setTherapyOptions(therapies);
+  }, [therapies]);
+
+  useEffect(() => {
     if (!open || scheduleReady) return;
     setPreviewBookings(dayBookings);
   }, [open, dayBookings, scheduleReady]);
@@ -583,6 +593,18 @@ export function BookingFormModal({
     (query: string, page = 1) => searchPatients(query, page),
     [],
   );
+
+  const handleTherapySearch = useCallback(
+    (query: string, page = 1) => searchTherapies(query, page),
+    [],
+  );
+
+  const mergeTherapyOption = useCallback((therapy: Therapy) => {
+    setTherapyOptions((prev) => {
+      if (prev.some((t) => t.id === therapy.id)) return prev;
+      return [...prev, therapy].sort((a, b) => a.name.localeCompare(b.name));
+    });
+  }, []);
 
   async function persistBooking(): Promise<Booking | undefined> {
     const values = form.getValues();
@@ -883,32 +905,39 @@ export function BookingFormModal({
                 <FormField
                   control={form.control}
                   name="therapyId"
-                  render={({ field }) => (
+                  render={({ field, fieldState }) => (
                     <FormItem>
-                      <FormLabel>Therapy</FormLabel>
-                      <Select
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          if (continuingPlanId && value !== continuingPlan?.therapyId) {
-                            setContinuingPlanId(null);
-                          }
-                        }}
-                        value={field.value}
-                        disabled={isContinuingPackage}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select therapy" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {therapies.map((therapy) => (
-                            <SelectItem key={therapy.id} value={therapy.id}>
-                              {therapy.name} ({formatDuration(therapy.durationMinutes)})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="flex items-center justify-between gap-2">
+                        <FormLabel>Therapy</FormLabel>
+                        {mode === 'create' && !isContinuingPackage && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 text-xs"
+                            onClick={() => setQuickAddTherapyOpen(true)}
+                          >
+                            <Plus className="mr-1 h-3.5 w-3.5" />
+                            Add
+                          </Button>
+                        )}
+                      </div>
+                      <FormControl>
+                        <TherapySearch
+                          value={field.value}
+                          onChange={(therapyId, therapy) => {
+                            field.onChange(therapyId);
+                            if (therapy) mergeTherapyOption(therapy);
+                            if (continuingPlanId && therapyId !== continuingPlan?.therapyId) {
+                              setContinuingPlanId(null);
+                            }
+                          }}
+                          onSearch={handleTherapySearch}
+                          knownTherapies={therapyOptions}
+                          disabled={isContinuingPackage}
+                          error={!!fieldState.error}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -1070,6 +1099,16 @@ export function BookingFormModal({
         onCreated={(patient) => {
           setSelectedPatient(patient);
           form.setValue('patientId', patient.id, { shouldValidate: true });
+        }}
+      />
+
+      <QuickAddTherapyDialog
+        open={quickAddTherapyOpen}
+        onOpenChange={setQuickAddTherapyOpen}
+        onCreated={(therapy) => {
+          mergeTherapyOption(therapy);
+          onTherapyCreated?.(therapy);
+          form.setValue('therapyId', therapy.id, { shouldValidate: true, shouldDirty: true });
         }}
       />
 

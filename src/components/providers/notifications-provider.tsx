@@ -16,6 +16,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -37,14 +38,19 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const [unreadTotal, setUnreadTotal] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  const refresh = useCallback(async () => {
+  const hasLoadedOnceRef = useRef(false);
+
+  const refresh = useCallback(async (options?: { background?: boolean }) => {
     if (!user) {
       setNotifications([]);
       setUnreadTotal(0);
       return;
     }
 
-    setLoading(true);
+    const isBackground = Boolean(options?.background && hasLoadedOnceRef.current);
+    if (!isBackground) {
+      setLoading(true);
+    }
     try {
       const [recent, unreadResult] = await Promise.all([
         listNotifications({ limit: 5 }),
@@ -52,6 +58,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       ]);
       setNotifications(recent.data);
       setUnreadTotal(unreadResult.meta.total);
+      hasLoadedOnceRef.current = true;
     } catch {
       // Bell and dashboard degrade gracefully
     } finally {

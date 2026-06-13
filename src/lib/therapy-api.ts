@@ -15,6 +15,10 @@ export interface CreateTherapyPayload {
   durationMinutes: number;
   price?: number;
   currency?: string;
+  isPackageBased?: boolean;
+  packageSessions?: number;
+  packageValidityDays?: number;
+  packageDescription?: string;
 }
 
 export type UpdateTherapyPayload = Partial<CreateTherapyPayload> & { isActive?: boolean };
