@@ -58,7 +58,7 @@ export default function LoginPage() {
               </div>
               <h1 className="text-2xl font-bold tracking-tight">CliniqFlow</h1>
               <p className="mt-1.5 text-sm text-blue-100">Clinic Therapy & Appointment Management</p>
-              <p className="mt-2 text-xs text-blue-200/80">Version 1.6</p>
+              <AppVersion className="mt-2 text-xs text-blue-200/80" />
             </div>
 
             <div className="px-8 py-8">

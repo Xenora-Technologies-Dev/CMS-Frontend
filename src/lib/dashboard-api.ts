@@ -1,6 +1,6 @@
 import { apiRequestPaginated } from './api';
-import type { Booking } from './types';
-import { endOfDay, startOfDay } from './utils';
+import { listBookings } from './booking-api';
+import type { Booking } from './types';import { endOfDay, startOfDay } from './utils';
 
 export interface DashboardStats {
   totalPatients: number;
@@ -28,6 +28,7 @@ export interface AdminDashboardData {
   todayByType: TypedBookings;
   pendingConfirmationToday: Booking[];
   pendingConfirmationOlder: Booking[];
+  pendingConfirmationAll: Booking[];
   upcoming: Booking[];
   upcomingByType: TypedBookings;
   activity: ActivityItem[];
@@ -144,14 +145,17 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
     `/bookings?dateFrom=${encodeURIComponent(startOfDay(activityStart).toISOString())}` +
     `&dateTo=${encodeURIComponent(endOfDay(upcomingEnd).toISOString())}&limit=200`;
 
-  const [totalPatients, activeTherapists, pendingLeaveRequests, bookingsResult] = await Promise.all([
+  const [totalPatients, activeTherapists, pendingLeaveRequests, bookingsResult, pendingResult] =
+    await Promise.all([
     fetchTotal('/patients?isActive=true'),
     fetchTotal('/therapists?isActive=true'),
     fetchTotal('/leave-requests?status=PENDING'),
     apiRequestPaginated<Booking>(bookingsPath),
+    listBookings({ status: 'PENDING_CONFIRMATION', limit: 50, sort: 'default' }),
   ]);
 
   const allBookings = bookingsResult.data;
+  const pendingConfirmationAll = pendingResult.data;
   const todayStart = startOfDay(today).getTime();
   const todayEnd = endOfDay(today).getTime();
   const todaysBookingsRaw = allBookings.filter((b) => {
@@ -171,8 +175,9 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
     },
     todayBookings,
     todayByType: splitByBookingType(todayBookings),
-    pendingConfirmationToday: derivePendingConfirmation(allBookings, 'today'),
-    pendingConfirmationOlder: derivePendingConfirmation(allBookings, 'older'),
+    pendingConfirmationToday: derivePendingConfirmation(pendingConfirmationAll, 'today'),
+    pendingConfirmationOlder: derivePendingConfirmation(pendingConfirmationAll, 'older'),
+    pendingConfirmationAll,
     upcoming,
     upcomingByType: splitByBookingType(upcoming),
     activity: deriveRecentActivity(allBookings),

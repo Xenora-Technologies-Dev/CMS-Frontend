@@ -20,7 +20,6 @@ import {
   updateTherapist,
   type CreatedTherapistUser,
 } from '@/lib/therapist-api';
-import { storeTherapistPassword } from '@/components/therapist/therapist-password-panel';
 import { resetUserPassword } from '@/lib/user-api';
 import { getErrorMessage } from '@/lib/validation-errors';
 import { useRouter } from 'next/navigation';
@@ -149,7 +148,6 @@ export function TherapistForm({ mode, therapistId }: TherapistFormProps) {
           requiresConsultationHours: createForm.requiresConsultationHours,
         });
         const user: CreatedTherapistUser = result.user;
-        storeTherapistPassword(user.id, createForm.password);
         const id = user.therapistId ?? user.id;
         router.push(`/admin/therapists/${id}`);
       } else if (therapistId) {
@@ -165,7 +163,6 @@ export function TherapistForm({ mode, therapistId }: TherapistFormProps) {
             return;
           }
           await resetUserPassword(userId, editForm.newPassword);
-          storeTherapistPassword(userId, editForm.newPassword);
         }
         await updateTherapist(therapistId, {
           licenseNumber: editForm.licenseNumber.trim() || undefined,

@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { CalendarDays, LayoutDashboard, User } from 'lucide-react';
+import { BookOpen, CalendarDays, LayoutDashboard, User } from 'lucide-react';
 
 export interface DoctorNavLink {
   type: 'link';
@@ -32,6 +32,12 @@ export const DOCTOR_NAV_MAIN: DoctorNavItem[] = [
     icon: CalendarDays,
     items: [{ title: 'My Calendar', href: '/doctor/calendar' }],
   },
+  {
+    type: 'link',
+    title: 'User Guide',
+    href: '/doctor/user-guide',
+    icon: BookOpen,
+  },
 ];
 
 export const DOCTOR_NAV_SECONDARY: DoctorNavItem[] = [
@@ -58,6 +64,10 @@ const PAGE_META: Record<string, DoctorPageMeta> = {
   '/doctor/calendar': {
     title: 'My Calendar',
     description: 'View your scheduled consultations.',
+  },
+  '/doctor/user-guide': {
+    title: 'User Guide',
+    description: 'How to use the doctor portal.',
   },
   '/doctor/profile': {
     title: 'Profile',

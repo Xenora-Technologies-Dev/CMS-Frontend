@@ -1,7 +1,7 @@
 'use client';
 
 import { TherapistAvailabilityPanel } from '@/components/therapist/therapist-availability-panel';
-import { TherapistPasswordPanel } from '@/components/therapist/therapist-password-panel';
+import { UserPasswordPanel } from '@/components/user/user-password-panel';
 import { ActiveStatusBadge } from '@/components/shared/active-status-badge';
 import { PageActions } from '@/components/shared/page-actions';
 import { Button } from '@/components/ui/button';
@@ -126,7 +126,7 @@ export function TherapistProfileView({ therapistId }: TherapistProfileViewProps)
         </Card>
       </div>
 
-      <TherapistPasswordPanel userId={therapist.user.id} email={therapist.user.email} />
+      <UserPasswordPanel userId={therapist.user.id} email={therapist.user.email} />
 
       <TherapistAvailabilityPanel therapistId={therapistId} />
     </div>

@@ -3,7 +3,9 @@
 import { useEffect, useRef } from 'react';
 import type { Notification } from '@/lib/notification-api';
 
-const BASE_TITLE = 'CliniqFlow';
+import { APP_NAME, APP_VERSION } from '@/lib/version';
+
+const BASE_TITLE = `${APP_NAME} v${APP_VERSION}`;
 
 function formatTitle(unreadCount: number): string {
   if (unreadCount <= 0) return BASE_TITLE;

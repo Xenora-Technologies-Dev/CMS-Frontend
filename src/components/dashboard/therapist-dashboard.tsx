@@ -5,6 +5,7 @@ import { fetchTherapistDashboardData } from '@/lib/therapist-dashboard-api';
 import type { Booking } from '@/lib/types';
 import type { LeaveRequest } from '@/lib/leave-api';
 import { TodaySchedule } from '@/components/dashboard/today-schedule';
+import { OlderAppointments } from '@/components/dashboard/older-appointments';
 import { UpcomingAppointments } from '@/components/dashboard/upcoming-appointments';
 import { LeaveStatusBadge } from '@/components/leave/leave-status-badge';
 import { formatDateTime } from '@/lib/utils';
@@ -27,6 +28,7 @@ export function TherapistDashboard() {
 
   const [todayBookings, setTodayBookings] = useState<Booking[]>([]);
   const [upcoming, setUpcoming] = useState<Booking[]>([]);
+  const [older, setOlder] = useState<Booking[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const { initialLoading, refreshing, beginLoad, endLoad } = useBackgroundLoadState();
   const [errors, setErrors] = useState<string[]>([]);
@@ -44,6 +46,7 @@ export function TherapistDashboard() {
       const data = await fetchTherapistDashboardData(therapistId);
       setTodayBookings(data.todayBookings);
       setUpcoming(data.upcoming);
+      setOlder(data.older);
       setLeaves(data.leaves);
     } catch {
       setErrors(['Could not load dashboard data']);
@@ -126,6 +129,7 @@ export function TherapistDashboard() {
             title="Upcoming Patients"
             viewerRole="therapist"
           />
+          <OlderAppointments bookings={older} viewerRole="therapist" />
         </div>
 
         <div className="space-y-6">

@@ -30,26 +30,32 @@ export async function listUsers(
   return apiRequestPaginated<UserListItem>(`/users?${query}`);
 }
 
-export interface UpdateAdminPayload {
+export interface UpdateUserPayload {
   firstName?: string;
   lastName?: string;
   email?: string;
   phone?: string;
 }
 
+/** @deprecated Use UpdateUserPayload */
+export type UpdateAdminPayload = UpdateUserPayload;
+
 export async function getUser(userId: string): Promise<{ user: UserListItem }> {
   return apiRequest<{ user: UserListItem }>(`/users/${userId}`);
 }
 
-export async function updateAdmin(
+export async function updateUser(
   userId: string,
-  payload: UpdateAdminPayload,
+  payload: UpdateUserPayload,
 ): Promise<{ user: UserListItem }> {
   return apiRequest<{ user: UserListItem }>(`/users/${userId}`, {
     method: 'PATCH',
     body: payload,
   });
 }
+
+/** @deprecated Use updateUser */
+export const updateAdmin = updateUser;
 
 export async function createAdmin(
   payload: CreateAdminPayload,

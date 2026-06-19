@@ -24,7 +24,8 @@ import {
   getTherapistColor,
   getTherapistName,
 } from '@/lib/utils';
-import { Check, Loader2, Search, X } from 'lucide-react';
+import { Check, Eye, Loader2, Search, X } from 'lucide-react';
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 const PREVIEW_LIMIT = 5;
@@ -41,6 +42,7 @@ interface DashboardBookingListProps {
   rooms: Room[];
   onActionComplete?: () => void;
   viewerRole?: 'admin' | 'therapist';
+  viewMoreHref?: string;
 }
 
 function BookingRow({
@@ -95,6 +97,17 @@ function BookingRow({
         <BookingStatusBadge status={booking.status} />
         {(showPendingActions || booking.status === 'PENDING_CONFIRMATION') && (
           <div className="flex gap-1">
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-8 w-8"
+              aria-label="View details"
+              disabled={actionBusy}
+              onClick={() => onClick?.(booking)}
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
             <Button
               type="button"
               size="icon"
@@ -193,6 +206,7 @@ export function DashboardBookingList({
   rooms,
   onActionComplete,
   viewerRole = 'admin',
+  viewMoreHref,
 }: DashboardBookingListProps) {
   const { showBookingAction } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
@@ -260,6 +274,24 @@ export function DashboardBookingList({
     setActionDialogOpen(true);
   }
 
+  const viewMoreLabel = `View more${totalCount > previewCount ? ` (${totalCount - previewCount} more)` : ''}`;
+
+  function renderViewMoreButton(className?: string) {
+    if (viewMoreHref && totalCount > 0) {
+      return (
+        <Button variant="ghost" size="sm" className={className ?? 'text-xs'} asChild>
+          <Link href={viewMoreHref}>{viewMoreLabel}</Link>
+        </Button>
+      );
+    }
+    if (!hasMore) return null;
+    return (
+      <Button variant="ghost" size="sm" className={className ?? 'text-xs'} onClick={() => setModalOpen(true)}>
+        {viewMoreLabel}
+      </Button>
+    );
+  }
+
   if (totalCount === 0) {
     return null;
   }
@@ -270,19 +302,11 @@ export function DashboardBookingList({
         {!hideHeader && (
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-            {hasMore && (
-              <Button variant="ghost" size="sm" className="text-xs" onClick={() => setModalOpen(true)}>
-                View more ({totalCount - previewCount} more)
-              </Button>
-            )}
+            {hasMore && renderViewMoreButton()}
           </div>
         )}
-        {hideHeader && hasMore && (
-          <div className="flex justify-end">
-            <Button variant="ghost" size="sm" className="text-xs" onClick={() => setModalOpen(true)}>
-              View more ({totalCount - previewCount} more)
-            </Button>
-          </div>
+        {hideHeader && (hasMore || (viewMoreHref && totalCount > 0)) && (
+          <div className="flex justify-end">{renderViewMoreButton()}</div>
         )}
 
         <TypeSection

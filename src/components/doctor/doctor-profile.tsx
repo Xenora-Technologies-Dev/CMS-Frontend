@@ -1,6 +1,7 @@
 'use client';
 
 import { ActiveStatusBadge } from '@/components/shared/active-status-badge';
+import { UserPasswordPanel } from '@/components/user/user-password-panel';
 import { PageActions } from '@/components/shared/page-actions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -120,6 +121,8 @@ export function DoctorProfileView({ doctorId }: DoctorProfileViewProps) {
           <CardContent className="text-sm text-muted-foreground">{doctor.bio}</CardContent>
         </Card>
       )}
+
+      <UserPasswordPanel userId={doctor.user.id} email={doctor.user.email} />
     </div>
   );
 }

@@ -59,6 +59,16 @@ export async function listBookings(params: ListBookingsParams = {}): Promise<Pag
   return apiRequestPaginated<Booking>(`/bookings${qs ? `?${qs}` : ''}`);
 }
 
+export async function fetchPendingConfirmationBookings(
+  limit = 50,
+): Promise<PaginatedResponse<Booking>> {
+  return listBookings({
+    status: 'PENDING_CONFIRMATION',
+    limit,
+    sort: 'default',
+  });
+}
+
 export async function listRecentBookings(
   params: ListBookingsParams = {},
 ): Promise<PaginatedResponse<Booking>> {
@@ -235,6 +245,46 @@ export function getTherapySearchMinLength(query: string): number {
   const trimmed = query.trim();
   if (/^\d+$/.test(trimmed)) return 1;
   return 2;
+}
+
+export interface TherapistSearchResult {
+  therapists: Therapist[];
+  hasMore: boolean;
+  total: number;
+}
+
+const THERAPIST_SEARCH_PAGE_SIZE = 50;
+
+export function getTherapistSearchMinLength(query: string): number {
+  const trimmed = query.trim();
+  if (trimmed.includes('@')) return 3;
+  return 2;
+}
+
+export async function searchTherapists(
+  query: string,
+  page = 1,
+  limit = THERAPIST_SEARCH_PAGE_SIZE,
+): Promise<TherapistSearchResult> {
+  const trimmed = query.trim();
+  const params = new URLSearchParams({
+    limit: String(limit),
+    page: String(page),
+    isActive: 'true',
+  });
+  if (trimmed) params.set('search', trimmed);
+
+  const cacheKey = `therapist-search:${trimmed}:${page}:${limit}`;
+  const result = await dedupeRequest(cacheKey, () =>
+    apiRequestPaginated<Therapist>(`/therapists?${params.toString()}`),
+  );
+
+  const { page: currentPage, totalPages, total } = result.meta;
+  return {
+    therapists: result.data,
+    hasMore: currentPage < totalPages,
+    total,
+  };
 }
 
 export async function searchTherapies(

@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Bell,
+  BookOpen,
   Building2,
   CalendarDays,
   DoorOpen,
@@ -50,6 +51,7 @@ export const ADMIN_NAV_MAIN: AdminNavItem[] = [
       { title: 'Therapy Booking', href: '/admin/appointments/calendar' },
       { title: 'Consultation Booking', href: '/admin/appointments/consultation' },
       { title: 'Appointment List', href: '/admin/appointments/list' },
+      { title: 'Pending Confirmation', href: '/admin/appointments/pending-confirmation' },
       { title: 'Recent Bookings', href: '/admin/appointments/recent' },
     ],
   },
@@ -122,6 +124,12 @@ export const ADMIN_NAV_MAIN: AdminNavItem[] = [
   },
   {
     type: 'link',
+    title: 'User Guide',
+    href: '/admin/user-guide',
+    icon: BookOpen,
+  },
+  {
+    type: 'link',
     title: 'Users',
     href: '/admin/users',
     icon: UsersRound,
@@ -180,6 +188,10 @@ const PAGE_META: Record<string, AdminPageMeta> = {
     title: 'Recent Bookings',
     description: 'Bookings created in the last 48 hours with audit tracking.',
   },
+  '/admin/appointments/pending-confirmation': {
+    title: 'Pending Confirmation',
+    description: 'Therapy and consultation bookings awaiting completion confirmation.',
+  },
   '/admin/reports/therapy': {
     title: 'Therapy Report',
     description: 'Therapy booking statistics and export.',
@@ -220,6 +232,10 @@ const PAGE_META: Record<string, AdminPageMeta> = {
   '/admin/activity-log': {
     title: 'Activity Log',
     description: 'Audit trail of clinic actions and changes.',
+  },
+  '/admin/user-guide': {
+    title: 'User Guide',
+    description: 'Interactive guide for clinic administrators.',
   },
   '/admin/notifications': { title: 'Notifications', description: 'System alerts and activity updates.' },
   '/admin/settings': {

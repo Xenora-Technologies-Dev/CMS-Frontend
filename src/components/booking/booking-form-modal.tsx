@@ -3,6 +3,7 @@
 import { BookingSummary } from '@/components/booking/booking-summary';
 import { AvailableSlotsPicker } from '@/components/booking/available-slots-picker';
 import { PatientSearch } from '@/components/booking/patient-search';
+import { TherapistSearch } from '@/components/booking/therapist-search';
 import { TherapySearch } from '@/components/booking/therapy-search';
 import { QuickAddPatientDialog } from '@/components/booking/quick-add-patient-dialog';
 import { QuickAddTherapyDialog } from '@/components/booking/quick-add-therapy-dialog';
@@ -45,6 +46,7 @@ import {
   rescheduleBooking,
   searchPatients,
   searchTherapies,
+  searchTherapists,
   updateBooking,
 } from '@/lib/booking-api';
 import {
@@ -154,6 +156,7 @@ export function BookingFormModal({
   const [quickAddPatientOpen, setQuickAddPatientOpen] = useState(false);
   const [quickAddTherapyOpen, setQuickAddTherapyOpen] = useState(false);
   const [therapyOptions, setTherapyOptions] = useState<Therapy[]>(therapies);
+  const [therapistOptions, setTherapistOptions] = useState<Therapist[]>(therapists);
   const [patientPackages, setPatientPackages] = useState<TreatmentPlan[]>([]);
   const [packagesLoading, setPackagesLoading] = useState(false);
   const [continuingPlanId, setContinuingPlanId] = useState<string | null>(null);
@@ -181,7 +184,7 @@ export function BookingFormModal({
   const selectedTherapy = therapyOptions.find((t) => t.id === watched.therapyId);
   const continuingPlan = patientPackages.find((p) => p.id === continuingPlanId) ?? null;
   const isContinuingPackage = Boolean(continuingPlanId && continuingPlan);
-  const selectedTherapist = therapists.find((t) => t.id === watched.therapistId);
+  const selectedTherapist = therapistOptions.find((t) => t.id === watched.therapistId);
   const selectedRoom = rooms.find((r) => r.id === watched.roomId);
 
   const endTime = useMemo(() => {
@@ -434,6 +437,10 @@ export function BookingFormModal({
   }, [therapies]);
 
   useEffect(() => {
+    setTherapistOptions(therapists);
+  }, [therapists]);
+
+  useEffect(() => {
     if (!open || scheduleReady) return;
     setPreviewBookings(dayBookings);
   }, [open, dayBookings, scheduleReady]);
@@ -599,10 +606,24 @@ export function BookingFormModal({
     [],
   );
 
+  const handleTherapistSearch = useCallback(
+    (query: string, page = 1) => searchTherapists(query, page),
+    [],
+  );
+
   const mergeTherapyOption = useCallback((therapy: Therapy) => {
     setTherapyOptions((prev) => {
       if (prev.some((t) => t.id === therapy.id)) return prev;
       return [...prev, therapy].sort((a, b) => a.name.localeCompare(b.name));
+    });
+  }, []);
+
+  const mergeTherapistOption = useCallback((therapist: Therapist) => {
+    setTherapistOptions((prev) => {
+      if (prev.some((t) => t.id === therapist.id)) return prev;
+      return [...prev, therapist].sort((a, b) =>
+        getTherapistName(a).localeCompare(getTherapistName(b)),
+      );
     });
   }, []);
 
@@ -872,31 +893,21 @@ export function BookingFormModal({
                 <FormField
                   control={form.control}
                   name="therapistId"
-                  render={({ field }) => (
+                  render={({ field, fieldState }) => (
                     <FormItem>
                       <FormLabel>Therapist</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select therapist" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {therapists.map((therapist) => (
-                            <SelectItem key={therapist.id} value={therapist.id}>
-                              <span className="flex items-center gap-2">
-                                <span
-                                  className="inline-block h-2 w-2 rounded-full"
-                                  style={{
-                                    backgroundColor: getTherapistColor(therapist.colorCode),
-                                  }}
-                                />
-                                {getTherapistName(therapist)}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <TherapistSearch
+                          value={field.value}
+                          onChange={(therapistId, therapist) => {
+                            field.onChange(therapistId);
+                            if (therapist) mergeTherapistOption(therapist);
+                          }}
+                          onSearch={handleTherapistSearch}
+                          knownTherapists={therapistOptions}
+                          error={!!fieldState.error}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

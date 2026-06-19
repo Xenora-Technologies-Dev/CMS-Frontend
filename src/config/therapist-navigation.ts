@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Bell, CalendarDays, LayoutDashboard, Palmtree, User } from 'lucide-react';
+import { Bell, BookOpen, CalendarDays, LayoutDashboard, Palmtree, User } from 'lucide-react';
 
 export interface TherapistNavLink {
   type: 'link';
@@ -40,6 +40,12 @@ export const THERAPIST_NAV_MAIN: TherapistNavItem[] = [
       { title: 'Leave Management', href: '/therapist/leaves/management' },
       { title: 'Leave History', href: '/therapist/leaves/history' },
     ],
+  },
+  {
+    type: 'link',
+    title: 'User Guide',
+    href: '/therapist/user-guide',
+    icon: BookOpen,
   },
 ];
 
@@ -89,6 +95,10 @@ const PAGE_META: Record<string, TherapistPageMeta> = {
   '/therapist/leaves/history': {
     title: 'Leave History',
     description: 'Your upcoming, today’s, and past leave records.',
+  },
+  '/therapist/user-guide': {
+    title: 'User Guide',
+    description: 'How to use the therapist portal.',
   },
   '/therapist/notifications': {
     title: 'Notifications',

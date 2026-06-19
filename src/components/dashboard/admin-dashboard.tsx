@@ -22,6 +22,7 @@ export function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [todayByType, setTodayByType] = useState({ therapy: [] as Booking[], consultation: [] as Booking[] });
   const [upcomingByType, setUpcomingByType] = useState({ therapy: [] as Booking[], consultation: [] as Booking[] });
+  const [pendingByType, setPendingByType] = useState({ therapy: [] as Booking[], consultation: [] as Booking[] });
   const [upcoming, setUpcoming] = useState<Booking[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [therapists, setTherapists] = useState<Therapist[]>([]);
@@ -44,6 +45,11 @@ export function AdminDashboard() {
       setTodayByType(data.todayByType);
       setUpcomingByType(data.upcomingByType);
       setUpcoming(data.upcoming);
+      const pendingAll = data.pendingConfirmationAll;
+      setPendingByType({
+        therapy: pendingAll.filter((b) => b.bookingType !== 'CONSULTATION'),
+        consultation: pendingAll.filter((b) => b.bookingType === 'CONSULTATION'),
+      });
       setActivity(data.activity);
       setTherapists(therapistResult.data);
       setDoctors(doctorResult.data);
@@ -176,6 +182,28 @@ export function AdminDashboard() {
               )}
             </CardContent>
           </Card>
+
+          {(pendingByType.therapy.length > 0 || pendingByType.consultation.length > 0) && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold">Pending Confirmation</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DashboardBookingList
+                  title="Pending Confirmation"
+                  therapyBookings={pendingByType.therapy}
+                  consultationBookings={pendingByType.consultation}
+                  showPendingActions
+                  hideHeader
+                  therapists={therapists}
+                  doctors={doctors}
+                  rooms={rooms}
+                  viewMoreHref="/admin/appointments/pending-confirmation"
+                  onActionComplete={() => void loadDashboard({ background: true })}
+                />
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 

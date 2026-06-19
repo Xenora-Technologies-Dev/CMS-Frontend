@@ -4,7 +4,7 @@ import { ActiveStatusBadge } from '@/components/shared/active-status-badge';
 import { ListToolbar, statusFilterToIsActive, type StatusFilter } from '@/components/shared/list-toolbar';
 import { PaginationControls } from '@/components/shared/pagination-controls';
 import { CreateAdminDialog } from '@/components/user/create-admin-dialog';
-import { EditAdminDialog } from '@/components/user/edit-admin-dialog';
+import { EditUserDialog } from '@/components/user/edit-user-dialog';
 import { UserViewDialog } from '@/components/user/user-view-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,6 @@ import { getFeaturesForRole } from '@/lib/permissions';
 import { listUsers, setUserStatus } from '@/lib/user-api';
 import type { PaginatedMeta, UserListItem, UserRole } from '@/lib/types';
 import { Plus, Shield, UserCog, Eye, Pencil } from 'lucide-react';
-import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 const DEFAULT_META: PaginatedMeta = { page: 1, limit: 20, total: 0, totalPages: 0 };
@@ -220,23 +219,14 @@ export function UserList() {
                             <Eye className="mr-1.5 h-3.5 w-3.5" />
                             View
                           </Button>
-                          {user.role === 'ADMIN' ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setEditUser(user)}
-                            >
-                              <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                              Edit
-                            </Button>
-                          ) : user.therapistId ? (
-                            <Button variant="outline" size="sm" asChild>
-                              <Link href={`/admin/therapists/${user.therapistId}/edit`}>
-                                <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                                Edit
-                              </Link>
-                            </Button>
-                          ) : null}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEditUser(user)}
+                          >
+                            <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                            Edit
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -277,7 +267,7 @@ export function UserList() {
           if (!open) setViewUser(null);
         }}
       />
-      <EditAdminDialog
+      <EditUserDialog
         user={editUser}
         open={!!editUser}
         onOpenChange={(open) => {

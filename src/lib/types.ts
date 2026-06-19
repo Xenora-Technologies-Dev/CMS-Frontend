@@ -39,6 +39,14 @@ export interface UserListItem {
   lastLoginAt?: string | null;
   therapistId?: string | null;
   doctorId?: string | null;
+  managedPassword?: string | null;
+}
+
+export interface UpdateUserPayload {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
 }
 
 export interface CreateAdminPayload {

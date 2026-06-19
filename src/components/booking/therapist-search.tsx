@@ -1,10 +1,10 @@
 'use client';
 
-import type { TherapySearchResult } from '@/lib/booking-api';
-import { getTherapySearchMinLength } from '@/lib/booking-api';
-import { getTherapy } from '@/lib/therapy-api';
-import type { Therapy } from '@/lib/types';
-import { cn, formatDuration } from '@/lib/utils';
+import type { TherapistSearchResult } from '@/lib/booking-api';
+import { getTherapistSearchMinLength } from '@/lib/booking-api';
+import { getTherapist } from '@/lib/therapist-api';
+import type { Therapist } from '@/lib/types';
+import { cn, getTherapistColor, getTherapistName } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -13,81 +13,61 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
-interface TherapySearchProps {
+interface TherapistSearchProps {
   value?: string;
-  onChange: (therapyId: string, therapy?: Therapy) => void;
-  onSearch: (query: string, page?: number) => Promise<TherapySearchResult>;
-  knownTherapies?: Therapy[];
+  onChange: (therapistId: string, therapist?: Therapist) => void;
+  onSearch: (query: string, page?: number) => Promise<TherapistSearchResult>;
+  knownTherapists?: Therapist[];
   disabled?: boolean;
   error?: boolean;
 }
 
-function toTherapyOption(therapy: {
-  id: string;
-  name: string;
-  code?: string | null;
-  durationMinutes: number;
-  isPackageBased?: boolean;
-  packageSessions?: number | null;
-  packageValidityDays?: number | null;
-}): Therapy {
-  return {
-    id: therapy.id,
-    name: therapy.name,
-    code: therapy.code,
-    durationMinutes: therapy.durationMinutes,
-    isPackageBased: therapy.isPackageBased,
-    packageSessions: therapy.packageSessions,
-    packageValidityDays: therapy.packageValidityDays,
-  };
-}
-
-export function TherapySearch({
+export function TherapistSearch({
   value,
   onChange,
   onSearch,
-  knownTherapies = [],
+  knownTherapists = [],
   disabled,
   error,
-}: TherapySearchProps) {
+}: TherapistSearchProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Therapy[]>([]);
+  const [results, setResults] = useState<Therapist[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [selectedTherapy, setSelectedTherapy] = useState<Therapy | null>(null);
+  const [selectedTherapist, setSelectedTherapist] = useState<Therapist | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const searchRequestIdRef = useRef(0);
 
-  const minSearchLength = getTherapySearchMinLength(query);
+  const minSearchLength = getTherapistSearchMinLength(query);
 
   useEffect(() => {
     if (!value) {
-      setSelectedTherapy(null);
+      setSelectedTherapist(null);
       return;
     }
 
-    const known = knownTherapies.find((therapy) => therapy.id === value);
+    const known = knownTherapists.find((therapist) => therapist.id === value);
     if (known) {
-      setSelectedTherapy(known);
+      setSelectedTherapist(known);
       return;
     }
 
-    if (selectedTherapy?.id === value) return;
+    if (selectedTherapist?.id === value) return;
 
-    const therapyId = value;
+    const therapistId = value;
     let cancelled = false;
     async function loadSelected() {
       setLoading(true);
       try {
-        const { therapy } = await getTherapy(therapyId);
+        const { therapist } = await getTherapist(therapistId);
         if (cancelled) return;
-        setSelectedTherapy(toTherapyOption(therapy));
+        setSelectedTherapist(therapist);
       } catch {
-        if (!cancelled) setSelectedTherapy(null);
+        if (!cancelled) setSelectedTherapist(null);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -96,12 +76,12 @@ export function TherapySearch({
     return () => {
       cancelled = true;
     };
-  }, [value, knownTherapies, selectedTherapy?.id]);
+  }, [value, knownTherapists, selectedTherapist?.id]);
 
   const runSearch = useCallback(
     async (searchQuery: string, searchPage: number, append: boolean) => {
       const trimmed = searchQuery.trim();
-      const requiredLength = getTherapySearchMinLength(trimmed);
+      const requiredLength = getTherapistSearchMinLength(trimmed);
       if (trimmed.length > 0 && trimmed.length < requiredLength) {
         setResults([]);
         setHasMore(false);
@@ -116,7 +96,7 @@ export function TherapySearch({
       try {
         const result = await onSearch(trimmed, searchPage);
         if (requestId !== searchRequestIdRef.current) return;
-        setResults((prev) => (append ? [...prev, ...result.therapies] : result.therapies));
+        setResults((prev) => (append ? [...prev, ...result.therapists] : result.therapists));
         setHasMore(result.hasMore);
         setTotal(result.total);
         setPage(searchPage);
@@ -145,9 +125,9 @@ export function TherapySearch({
     };
   }, [open, query, runSearch]);
 
-  function handleSelect(therapy: Therapy) {
-    setSelectedTherapy(therapy);
-    onChange(therapy.id, therapy);
+  function handleSelect(therapist: Therapist) {
+    setSelectedTherapist(therapist);
+    onChange(therapist.id, therapist);
     setOpen(false);
   }
 
@@ -170,24 +150,23 @@ export function TherapySearch({
           disabled={disabled}
           className={cn(
             'w-full justify-between font-normal',
-            !selectedTherapy && 'text-muted-foreground',
+            !selectedTherapist && 'text-muted-foreground',
             error && 'border-destructive',
           )}
         >
-          {loading && !selectedTherapy && value
-            ? 'Loading therapy…'
-            : selectedTherapy
-              ? (
-                  <span className="flex flex-col items-start truncate text-left">
-                    <span>{selectedTherapy.name} ({formatDuration(selectedTherapy.durationMinutes)})</span>
-                    {selectedTherapy.isPackageBased && selectedTherapy.packageSessions ? (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800">
-                        {selectedTherapy.packageSessions} session package
-                      </span>
-                    ) : null}
-                  </span>
-                )
-              : 'Search therapy…'}
+          {loading && !selectedTherapist && value ? (
+            'Loading therapist…'
+          ) : selectedTherapist ? (
+            <span className="flex items-center gap-2 truncate">
+              <span
+                className="inline-block h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: getTherapistColor(selectedTherapist.colorCode) }}
+              />
+              {getTherapistName(selectedTherapist)}
+            </span>
+          ) : (
+            'Search therapist…'
+          )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -196,7 +175,7 @@ export function TherapySearch({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Name or code…"
+            placeholder="Name, email, specialization…"
             autoFocus
           />
           <p className="mt-1.5 text-[11px] text-muted-foreground">
@@ -204,13 +183,13 @@ export function TherapySearch({
               ? `Type at least ${minSearchLength} character${minSearchLength === 1 ? '' : 's'} to search`
               : total > 0
                 ? `${total.toLocaleString()} match${total === 1 ? '' : 'es'}`
-                : 'Search across all therapies'}
+                : 'Search across all therapists'}
           </p>
         </div>
         <div ref={listRef} className="max-h-60 overflow-y-auto p-1">
           {showMinCharsHint ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              Enter {minSearchLength}+ character{minSearchLength === 1 ? '' : 's'} to search therapies
+              Enter {minSearchLength}+ character{minSearchLength === 1 ? '' : 's'} to search therapists
             </p>
           ) : loading ? (
             <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
@@ -219,36 +198,31 @@ export function TherapySearch({
             </div>
           ) : results.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              {query.trim() ? 'No therapies found' : 'Start typing to search therapies'}
+              {query.trim() ? 'No therapists found' : 'Start typing to search therapists'}
             </p>
           ) : (
             <>
-              {results.map((therapy) => (
+              {results.map((therapist) => (
                 <button
-                  key={therapy.id}
+                  key={therapist.id}
                   type="button"
-                  onClick={() => handleSelect(therapy)}
+                  onClick={() => handleSelect(therapist)}
                   className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm hover:bg-accent"
                 >
                   <Check
                     className={cn(
                       'h-4 w-4',
-                      selectedTherapy?.id === therapy.id ? 'opacity-100' : 'opacity-0',
+                      selectedTherapist?.id === therapist.id ? 'opacity-100' : 'opacity-0',
                     )}
                   />
-                  <span className="flex-1">
-                    <span className="font-medium">{therapy.name}</span>
-                    {therapy.isPackageBased && therapy.packageSessions ? (
-                      <span className="mt-0.5 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-xs font-bold text-amber-900">
-                        {therapy.packageSessions} session package
-                        {therapy.packageValidityDays
-                          ? ` · valid ${therapy.packageValidityDays} days`
-                          : ''}
-                      </span>
-                    ) : null}
-                    <span className="block text-xs text-muted-foreground">
-                      {formatDuration(therapy.durationMinutes)}
-                      {therapy.code ? ` · ${therapy.code}` : ''}
+                  <span
+                    className="inline-block h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: getTherapistColor(therapist.colorCode) }}
+                  />
+                  <span className="flex-1 min-w-0">
+                    <span className="font-medium">{getTherapistName(therapist)}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {therapist.specialization ?? therapist.user.email}
                     </span>
                   </span>
                 </button>
