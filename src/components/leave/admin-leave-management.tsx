@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -27,15 +28,26 @@ import { Textarea } from '@/components/ui/textarea';
 import { useProgressAction } from '@/hooks/use-progress-action';
 import {
   approveLeaveRequest,
+  cancelLeaveRequest,
   listLeaveRequests,
   rejectLeaveRequest,
+  updateLeaveRequest,
   type LeaveRequest,
   type LeaveRequestStatus,
 } from '@/lib/leave-api';
 import { listTherapists } from '@/lib/therapist-api';
 import { getFriendlyErrorMessage } from '@/lib/error-utils';
-import { formatDateTime, getTherapistName } from '@/lib/utils';
-import { Check, Loader2, X } from 'lucide-react';
+import {
+  combineDateAndTime,
+  endOfDay,
+  formatDateInput,
+  formatDateTime,
+  getTherapistName,
+  parseDateInput,
+  startOfDay,
+  toTimeInputValue,
+} from '@/lib/utils';
+import { Check, Loader2, Pencil, X } from 'lucide-react';
 import { useBackgroundLoadState } from '@/hooks/use-background-load-state';
 import { useDebouncedCallback } from '@/hooks/use-debounced-callback';
 import { useCallback, useEffect, useState } from 'react';
@@ -60,6 +72,17 @@ export function AdminLeaveManagement() {
 
   const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
   const [rejectNotes, setRejectNotes] = useState('');
+
+  const [modifyTarget, setModifyTarget] = useState<LeaveRequest | null>(null);
+  const [modifyStartDate, setModifyStartDate] = useState('');
+  const [modifyStartTime, setModifyStartTime] = useState('09:00');
+  const [modifyEndDate, setModifyEndDate] = useState('');
+  const [modifyEndTime, setModifyEndTime] = useState('17:00');
+  const [modifyIsFullDay, setModifyIsFullDay] = useState(false);
+  const [modifyReason, setModifyReason] = useState('');
+  const [modifyAdminNotes, setModifyAdminNotes] = useState('');
+
+  const [cancelTarget, setCancelTarget] = useState<LeaveRequest | null>(null);
 
   const load = useCallback(async (options?: { background?: boolean }) => {
     beginLoad(options);
@@ -130,6 +153,78 @@ export function AdminLeaveManagement() {
       }, `Updating request for ${getTherapistName(rejectTarget.therapist)}`);
     } catch (err) {
       setError(getFriendlyErrorMessage(err, 'Failed to reject leave request'));
+    } finally {
+      setProcessingId(null);
+    }
+  }
+
+  function openModifyDialog(leave: LeaveRequest) {
+    setModifyTarget(leave);
+    setModifyStartDate(formatDateInput(new Date(leave.startDateTime)));
+    setModifyEndDate(formatDateInput(new Date(leave.endDateTime)));
+    setModifyStartTime(toTimeInputValue(leave.startDateTime));
+    setModifyEndTime(toTimeInputValue(leave.endDateTime));
+    setModifyIsFullDay(leave.isFullDay);
+    setModifyReason(leave.reason);
+    setModifyAdminNotes(leave.adminNotes ?? '');
+  }
+
+  async function handleModify() {
+    if (!modifyTarget || !modifyReason.trim()) return;
+    setProcessingId(modifyTarget.id);
+    setError(null);
+    try {
+      const startDateTime = modifyIsFullDay
+        ? startOfDay(parseDateInput(modifyStartDate)).toISOString()
+        : combineDateAndTime(parseDateInput(modifyStartDate), modifyStartTime).toISOString();
+      const endDateTime = modifyIsFullDay
+        ? endOfDay(parseDateInput(modifyEndDate || modifyStartDate)).toISOString()
+        : combineDateAndTime(parseDateInput(modifyEndDate), modifyEndTime).toISOString();
+
+      if (new Date(endDateTime) < new Date(startDateTime)) {
+        setError('End date/time must be on or after start date/time');
+        setProcessingId(null);
+        return;
+      }
+
+      await run(
+        'Updating leave…',
+        async () => {
+          await updateLeaveRequest(modifyTarget.id, {
+            startDateTime,
+            endDateTime,
+            isFullDay: modifyIsFullDay,
+            reason: modifyReason.trim(),
+            adminNotes: modifyAdminNotes.trim() || undefined,
+          });
+          setModifyTarget(null);
+          await load({ background: true });
+        },
+        `Updating leave for ${getTherapistName(modifyTarget.therapist)}`,
+      );
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Failed to update leave request'));
+    } finally {
+      setProcessingId(null);
+    }
+  }
+
+  async function handleCancel() {
+    if (!cancelTarget) return;
+    setProcessingId(cancelTarget.id);
+    setError(null);
+    try {
+      await run(
+        'Cancelling leave…',
+        async () => {
+          await cancelLeaveRequest(cancelTarget.id);
+          setCancelTarget(null);
+          await load({ background: true });
+        },
+        `Cancelling leave for ${getTherapistName(cancelTarget.therapist)}`,
+      );
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Failed to cancel leave request'));
     } finally {
       setProcessingId(null);
     }
@@ -247,6 +342,16 @@ export function AdminLeaveManagement() {
                         </Button>
                         <Button
                           size="sm"
+                          variant="outline"
+                          className="w-full sm:w-auto"
+                          onClick={() => openModifyDialog(leave)}
+                          disabled={isProcessing || progress.open}
+                        >
+                          <Pencil className="mr-1 h-4 w-4" />
+                          Modify
+                        </Button>
+                        <Button
+                          size="sm"
                           variant="destructive"
                           className="w-full sm:w-auto"
                           onClick={() => setRejectTarget(leave)}
@@ -254,6 +359,30 @@ export function AdminLeaveManagement() {
                         >
                           <X className="mr-1 h-4 w-4" />
                           Reject
+                        </Button>
+                      </div>
+                    )}
+                    {leave.status === 'APPROVED' && (
+                      <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full sm:w-auto"
+                          onClick={() => openModifyDialog(leave)}
+                          disabled={isProcessing || progress.open}
+                        >
+                          <Pencil className="mr-1 h-4 w-4" />
+                          Modify
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="w-full sm:w-auto"
+                          onClick={() => setCancelTarget(leave)}
+                          disabled={isProcessing || progress.open}
+                        >
+                          <X className="mr-1 h-4 w-4" />
+                          Cancel leave
                         </Button>
                       </div>
                     )}
@@ -312,6 +441,170 @@ export function AdminLeaveManagement() {
                 </>
               ) : (
                 'Reject request'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!modifyTarget}
+        onOpenChange={(o) => {
+          if (!o && !progress.open) setModifyTarget(null);
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Modify Leave</DialogTitle>
+          </DialogHeader>
+          {modifyTarget && (
+            <div className="grid gap-4">
+              <p className="text-sm text-muted-foreground">
+                {getTherapistName(modifyTarget.therapist)}
+              </p>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={modifyIsFullDay}
+                  onChange={(e) => setModifyIsFullDay(e.target.checked)}
+                  disabled={progress.open}
+                />
+                Full day leave
+              </label>
+              <div className="space-y-2">
+                <Label>Start date{modifyIsFullDay ? '' : ' & time'} *</Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input
+                    type="date"
+                    value={modifyStartDate}
+                    onChange={(e) => {
+                      setModifyStartDate(e.target.value);
+                      if (modifyIsFullDay && !modifyEndDate) setModifyEndDate(e.target.value);
+                    }}
+                    required
+                    disabled={progress.open}
+                  />
+                  {!modifyIsFullDay && (
+                    <Input
+                      type="time"
+                      value={modifyStartTime}
+                      onChange={(e) => setModifyStartTime(e.target.value)}
+                      required
+                      disabled={progress.open}
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>End date{modifyIsFullDay ? '' : ' & time'} *</Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input
+                    type="date"
+                    value={modifyIsFullDay ? modifyEndDate || modifyStartDate : modifyEndDate}
+                    onChange={(e) => setModifyEndDate(e.target.value)}
+                    min={modifyStartDate}
+                    required
+                    disabled={progress.open}
+                  />
+                  {!modifyIsFullDay && (
+                    <Input
+                      type="time"
+                      value={modifyEndTime}
+                      onChange={(e) => setModifyEndTime(e.target.value)}
+                      required
+                      disabled={progress.open}
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="modifyReason">Reason *</Label>
+                <Textarea
+                  id="modifyReason"
+                  value={modifyReason}
+                  onChange={(e) => setModifyReason(e.target.value)}
+                  required
+                  minLength={3}
+                  disabled={progress.open}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="modifyAdminNotes">Admin notes</Label>
+                <Textarea
+                  id="modifyAdminNotes"
+                  value={modifyAdminNotes}
+                  onChange={(e) => setModifyAdminNotes(e.target.value)}
+                  disabled={progress.open}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setModifyTarget(null)}
+              disabled={progress.open}
+            >
+              Close
+            </Button>
+            <Button
+              className="w-full sm:w-auto"
+              onClick={() => void handleModify()}
+              disabled={progress.open || !modifyReason.trim()}
+            >
+              {progress.open ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving…
+                </>
+              ) : (
+                'Save changes'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!cancelTarget}
+        onOpenChange={(o) => {
+          if (!o && !progress.open) setCancelTarget(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel Approved Leave</DialogTitle>
+          </DialogHeader>
+          {cancelTarget && (
+            <p className="text-sm text-muted-foreground">
+              Cancel approved leave for {getTherapistName(cancelTarget.therapist)} on{' '}
+              {formatLeaveRange(cancelTarget.startDateTime, cancelTarget.endDateTime)}? Slots will
+              become available again for booking.
+            </p>
+          )}
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setCancelTarget(null)}
+              disabled={progress.open}
+            >
+              Keep leave
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full sm:w-auto"
+              onClick={() => void handleCancel()}
+              disabled={progress.open}
+            >
+              {progress.open ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Cancelling…
+                </>
+              ) : (
+                'Cancel leave'
               )}
             </Button>
           </DialogFooter>

@@ -73,6 +73,14 @@ export interface CreateLeavePayload {
   reason: string;
 }
 
+export interface UpdateLeavePayload {
+  startDateTime: string;
+  endDateTime: string;
+  isFullDay?: boolean;
+  reason: string;
+  adminNotes?: string;
+}
+
 function buildQuery(params: ListLeaveParams): string {
   const qs = new URLSearchParams();
   if (params.page) qs.set('page', String(params.page));
@@ -150,6 +158,16 @@ export async function cancelLeaveRequest(
 ): Promise<{ leaveRequest: LeaveRequest }> {
   return apiRequest<{ leaveRequest: LeaveRequest }>(`/leave-requests/${id}/cancel`, {
     method: 'POST',
+  });
+}
+
+export async function updateLeaveRequest(
+  id: string,
+  payload: UpdateLeavePayload,
+): Promise<{ leaveRequest: LeaveRequest; affectedBookings: AffectedBooking[] }> {
+  return apiRequest(`/leave-requests/${id}`, {
+    method: 'PATCH',
+    body: payload,
   });
 }
 

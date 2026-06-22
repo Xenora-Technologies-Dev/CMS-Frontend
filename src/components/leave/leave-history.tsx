@@ -2,8 +2,16 @@
 
 import { LeaveStatusBadge } from '@/components/leave/leave-status-badge';
 import { PaginationControls } from '@/components/shared/pagination-controls';
+import { ProgressDialog } from '@/components/shared/progress-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -13,15 +21,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
-import { listLeaveRequests, type LeaveHistoryScope, type LeaveRequest } from '@/lib/leave-api';
+import { useProgressAction } from '@/hooks/use-progress-action';
+import {
+  cancelLeaveRequest,
+  listLeaveRequests,
+  updateLeaveRequest,
+  type LeaveHistoryScope,
+  type LeaveRequest,
+} from '@/lib/leave-api';
 import { listTherapists } from '@/lib/therapist-api';
 import { getFriendlyErrorMessage } from '@/lib/error-utils';
 import type { PaginatedMeta, Therapist } from '@/lib/types';
-import { endOfDay, formatDateTime, getTherapistName, parseDateInput, startOfDay } from '@/lib/utils';
-import { Loader2, RefreshCw, Search } from 'lucide-react';
+import {
+  combineDateAndTime,
+  endOfDay,
+  formatDateInput,
+  formatDateTime,
+  getTherapistName,
+  parseDateInput,
+  startOfDay,
+  toTimeInputValue,
+} from '@/lib/utils';
+import { Loader2, Pencil, RefreshCw, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-
 interface LeaveHistoryProps {
   viewerRole: 'admin' | 'therapist';
 }
@@ -70,6 +94,11 @@ interface LeaveHistorySectionProps {
   dateFrom: string;
   dateTo: string;
   search: string;
+  showAdminActions?: boolean;
+  processingId?: string | null;
+  onModify?: (leave: LeaveRequest) => void;
+  onCancel?: (leave: LeaveRequest) => void;
+  reloadToken?: number;
 }
 
 function LeaveHistorySection({
@@ -82,6 +111,11 @@ function LeaveHistorySection({
   dateFrom,
   dateTo,
   search,
+  showAdminActions = false,
+  processingId = null,
+  onModify,
+  onCancel,
+  reloadToken = 0,
 }: LeaveHistorySectionProps) {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(defaultLimit);
@@ -112,11 +146,14 @@ function LeaveHistorySection({
     } finally {
       setLoading(false);
     }
-  }, [page, limit, scope, viewerRole, therapistFilter, dateFrom, dateTo, search]);
+  }, [page, limit, scope, viewerRole, therapistFilter, dateFrom, dateTo, search, reloadToken]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const colSpan =
+    (viewerRole === 'admin' ? 6 : 4) + (showAdminActions ? 1 : 0);
 
   useEffect(() => {
     setPage(1);
@@ -151,15 +188,13 @@ function LeaveHistorySection({
                 <th className="px-3 py-2.5 font-medium">Type</th>
                 <th className="px-3 py-2.5 font-medium">Reason</th>
                 {viewerRole === 'admin' && <th className="px-3 py-2.5 font-medium">Approved By</th>}
+                {showAdminActions && <th className="px-3 py-2.5 font-medium">Actions</th>}
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td
-                    colSpan={viewerRole === 'admin' ? 6 : 4}
-                    className="px-3 py-10 text-center text-muted-foreground"
-                  >
+                  <td colSpan={colSpan} className="px-3 py-10 text-center text-muted-foreground">
                     <span className="inline-flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Loading…
@@ -168,10 +203,7 @@ function LeaveHistorySection({
                 </tr>
               ) : leaves.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={viewerRole === 'admin' ? 6 : 4}
-                    className="px-3 py-10 text-center text-muted-foreground"
-                  >
+                  <td colSpan={colSpan} className="px-3 py-10 text-center text-muted-foreground">
                     No leave records in this section.
                   </td>
                 </tr>
@@ -198,6 +230,32 @@ function LeaveHistorySection({
                           : '—'}
                       </td>
                     )}
+                    {showAdminActions && (
+                      <td className="px-3 py-3">
+                        {(leave.status === 'PENDING' || leave.status === 'APPROVED') && (
+                          <div className="flex flex-col gap-1.5 sm:flex-row">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => onModify?.(leave)}
+                              disabled={processingId === leave.id}
+                            >
+                              <Pencil className="mr-1 h-3.5 w-3.5" />
+                              Modify
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => onCancel?.(leave)}
+                              disabled={processingId === leave.id}
+                            >
+                              <X className="mr-1 h-3.5 w-3.5" />
+                              Cancel
+                            </Button>
+                          </div>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
@@ -221,12 +279,112 @@ function LeaveHistorySection({
 }
 
 export function LeaveHistory({ viewerRole }: LeaveHistoryProps) {
+  const { progress, run } = useProgressAction();
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [therapistFilter, setTherapistFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+
+  const [modifyTarget, setModifyTarget] = useState<LeaveRequest | null>(null);
+  const [modifyStartDate, setModifyStartDate] = useState('');
+  const [modifyStartTime, setModifyStartTime] = useState('09:00');
+  const [modifyEndDate, setModifyEndDate] = useState('');
+  const [modifyEndTime, setModifyEndTime] = useState('17:00');
+  const [modifyIsFullDay, setModifyIsFullDay] = useState(false);
+  const [modifyReason, setModifyReason] = useState('');
+  const [modifyAdminNotes, setModifyAdminNotes] = useState('');
+
+  const [cancelTarget, setCancelTarget] = useState<LeaveRequest | null>(null);
+
+  const isAdmin = viewerRole === 'admin';
+
+  function refreshSections() {
+    setReloadToken((token) => token + 1);
+  }
+
+  function openModifyDialog(leave: LeaveRequest) {
+    setActionError(null);
+    setModifyTarget(leave);
+    setModifyStartDate(formatDateInput(new Date(leave.startDateTime)));
+    setModifyEndDate(formatDateInput(new Date(leave.endDateTime)));
+    setModifyStartTime(toTimeInputValue(leave.startDateTime));
+    setModifyEndTime(toTimeInputValue(leave.endDateTime));
+    setModifyIsFullDay(leave.isFullDay);
+    setModifyReason(leave.reason);
+    setModifyAdminNotes(leave.adminNotes ?? '');
+  }
+
+  async function handleModify() {
+    if (!modifyTarget || !modifyReason.trim()) return;
+    setProcessingId(modifyTarget.id);
+    setActionError(null);
+    try {
+      const startDateTime = modifyIsFullDay
+        ? startOfDay(parseDateInput(modifyStartDate)).toISOString()
+        : combineDateAndTime(parseDateInput(modifyStartDate), modifyStartTime).toISOString();
+      const endDateTime = modifyIsFullDay
+        ? endOfDay(parseDateInput(modifyEndDate || modifyStartDate)).toISOString()
+        : combineDateAndTime(parseDateInput(modifyEndDate), modifyEndTime).toISOString();
+
+      if (new Date(endDateTime) < new Date(startDateTime)) {
+        setActionError('End date/time must be on or after start date/time');
+        setProcessingId(null);
+        return;
+      }
+
+      await run(
+        'Updating leave…',
+        async () => {
+          await updateLeaveRequest(modifyTarget.id, {
+            startDateTime,
+            endDateTime,
+            isFullDay: modifyIsFullDay,
+            reason: modifyReason.trim(),
+            adminNotes: modifyAdminNotes.trim() || undefined,
+          });
+          setModifyTarget(null);
+          refreshSections();
+        },
+        `Updating leave for ${getTherapistName(modifyTarget.therapist)}`,
+      );
+    } catch (err) {
+      setActionError(getFriendlyErrorMessage(err, 'Failed to update leave request'));
+    } finally {
+      setProcessingId(null);
+    }
+  }
+
+  async function handleCancel() {
+    if (!cancelTarget) return;
+    setProcessingId(cancelTarget.id);
+    setActionError(null);
+    try {
+      await run(
+        'Cancelling leave…',
+        async () => {
+          await cancelLeaveRequest(cancelTarget.id);
+          setCancelTarget(null);
+          refreshSections();
+        },
+        `Cancelling leave for ${getTherapistName(cancelTarget.therapist)}`,
+      );
+    } catch (err) {
+      setActionError(getFriendlyErrorMessage(err, 'Failed to cancel leave request'));
+    } finally {
+      setProcessingId(null);
+    }
+  }
+
+  function formatLeaveRange(start: string, end: string) {
+    const s = formatDateTime(start);
+    const e = formatDateTime(end);
+    return s === e ? s : `${s} – ${e}`;
+  }
 
   useEffect(() => {
     if (viewerRole !== 'admin') return;
@@ -237,6 +395,12 @@ export function LeaveHistory({ viewerRole }: LeaveHistoryProps) {
 
   return (
     <div className="space-y-6">
+      <ProgressDialog
+        open={progress.open}
+        title={progress.title}
+        description={progress.description}
+      />
+
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Leave History</h1>
         <p className="text-sm text-muted-foreground">
@@ -245,6 +409,15 @@ export function LeaveHistory({ viewerRole }: LeaveHistoryProps) {
             : 'Browse your upcoming, today’s, and past leave records.'}
         </p>
       </div>
+
+      {actionError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        >
+          {actionError}
+        </div>
+      )}
 
       <Card>
         <CardHeader className="pb-3">
@@ -334,8 +507,177 @@ export function LeaveHistory({ viewerRole }: LeaveHistoryProps) {
           dateFrom={dateFrom}
           dateTo={dateTo}
           search={debouncedSearch}
+          showAdminActions={isAdmin && (section.scope === 'upcoming' || section.scope === 'today')}
+          processingId={processingId}
+          onModify={isAdmin ? openModifyDialog : undefined}
+          onCancel={isAdmin ? setCancelTarget : undefined}
+          reloadToken={reloadToken}
         />
       ))}
+
+      <Dialog
+        open={!!modifyTarget}
+        onOpenChange={(o) => {
+          if (!o && !progress.open) setModifyTarget(null);
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Modify Leave</DialogTitle>
+          </DialogHeader>
+          {modifyTarget && (
+            <div className="grid gap-4">
+              <p className="text-sm text-muted-foreground">
+                {getTherapistName(modifyTarget.therapist)}
+              </p>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={modifyIsFullDay}
+                  onChange={(e) => setModifyIsFullDay(e.target.checked)}
+                  disabled={progress.open}
+                />
+                Full day leave
+              </label>
+              <div className="space-y-2">
+                <Label>Start date{modifyIsFullDay ? '' : ' & time'} *</Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input
+                    type="date"
+                    value={modifyStartDate}
+                    onChange={(e) => {
+                      setModifyStartDate(e.target.value);
+                      if (modifyIsFullDay && !modifyEndDate) setModifyEndDate(e.target.value);
+                    }}
+                    required
+                    disabled={progress.open}
+                  />
+                  {!modifyIsFullDay && (
+                    <Input
+                      type="time"
+                      value={modifyStartTime}
+                      onChange={(e) => setModifyStartTime(e.target.value)}
+                      required
+                      disabled={progress.open}
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>End date{modifyIsFullDay ? '' : ' & time'} *</Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input
+                    type="date"
+                    value={modifyIsFullDay ? modifyEndDate || modifyStartDate : modifyEndDate}
+                    onChange={(e) => setModifyEndDate(e.target.value)}
+                    min={modifyStartDate}
+                    required
+                    disabled={progress.open}
+                  />
+                  {!modifyIsFullDay && (
+                    <Input
+                      type="time"
+                      value={modifyEndTime}
+                      onChange={(e) => setModifyEndTime(e.target.value)}
+                      required
+                      disabled={progress.open}
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="historyModifyReason">Reason *</Label>
+                <Textarea
+                  id="historyModifyReason"
+                  value={modifyReason}
+                  onChange={(e) => setModifyReason(e.target.value)}
+                  required
+                  minLength={3}
+                  disabled={progress.open}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="historyModifyAdminNotes">Admin notes</Label>
+                <Textarea
+                  id="historyModifyAdminNotes"
+                  value={modifyAdminNotes}
+                  onChange={(e) => setModifyAdminNotes(e.target.value)}
+                  disabled={progress.open}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setModifyTarget(null)}
+              disabled={progress.open}
+            >
+              Close
+            </Button>
+            <Button
+              className="w-full sm:w-auto"
+              onClick={() => void handleModify()}
+              disabled={progress.open || !modifyReason.trim()}
+            >
+              {progress.open ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving…
+                </>
+              ) : (
+                'Save changes'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!cancelTarget}
+        onOpenChange={(o) => {
+          if (!o && !progress.open) setCancelTarget(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel Leave</DialogTitle>
+          </DialogHeader>
+          {cancelTarget && (
+            <p className="text-sm text-muted-foreground">
+              Cancel leave for {getTherapistName(cancelTarget.therapist)} on{' '}
+              {formatLeaveRange(cancelTarget.startDateTime, cancelTarget.endDateTime)}? Slots will
+              become available again for booking.
+            </p>
+          )}
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setCancelTarget(null)}
+              disabled={progress.open}
+            >
+              Keep leave
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full sm:w-auto"
+              onClick={() => void handleCancel()}
+              disabled={progress.open}
+            >
+              {progress.open ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Cancelling…
+                </>
+              ) : (
+                'Cancel leave'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
