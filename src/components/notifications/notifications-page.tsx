@@ -1,24 +1,19 @@
 'use client';
 
-import { useSocketEvent } from '@/components/providers/socket-provider';
+import { useNotifications } from '@/components/providers/notifications-provider';
 import { PaginationControls } from '@/components/shared/pagination-controls';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { PaginatedMeta } from '@/lib/types';
-import {
-  listNotifications,
-  markAllNotificationsRead,
-  markNotificationRead,
-  type Notification,
-} from '@/lib/notification-api';
-import { SocketEvents } from '@/lib/socket-events';
-import { playNotificationSound } from '@/lib/notification-sound';
+import { listNotifications, type Notification } from '@/lib/notification-api';
 import { useNotificationAttention } from '@/hooks/use-notification-attention';
 import { Bell, CheckCheck, RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 export function NotificationsPage() {
+  const { unreadTotal, markRead, markAllRead, clearNewAlert, onRealtimeNotification } =
+    useNotifications();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState<PaginatedMeta>({
@@ -30,12 +25,7 @@ export function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.readAt).length,
-    [notifications],
-  );
-
-  const { showBrowserNotification } = useNotificationAttention(unreadCount, unreadCount > 0);
+  useNotificationAttention(unreadTotal, unreadTotal > 0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,24 +45,29 @@ export function NotificationsPage() {
     void load();
   }, [load]);
 
-  useSocketEvent<Notification>(SocketEvents.NOTIFICATION, (notification) => {
-    playNotificationSound();
-    showBrowserNotification(notification);
-    setNotifications((prev) => {
-      const without = prev.filter((n) => n.id !== notification.id);
-      return [notification, ...without];
+  useEffect(() => {
+    clearNewAlert();
+  }, [clearNewAlert]);
+
+  useEffect(() => {
+    return onRealtimeNotification((notification) => {
+      if (page !== 1) return;
+      setNotifications((prev) => {
+        const without = prev.filter((n) => n.id !== notification.id);
+        return [notification, ...without].slice(0, meta.limit);
+      });
     });
-  });
+  }, [onRealtimeNotification, page, meta.limit]);
 
   async function handleMarkRead(id: string) {
-    await markNotificationRead(id);
+    await markRead(id);
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n)),
     );
   }
 
   async function handleMarkAllRead() {
-    await markAllNotificationsRead();
+    await markAllRead();
     setNotifications((prev) =>
       prev.map((n) => ({ ...n, readAt: n.readAt ?? new Date().toISOString() })),
     );
@@ -85,9 +80,9 @@ export function NotificationsPage() {
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             <Bell className="h-6 w-6 text-primary" />
             Notifications
-            {unreadCount > 0 && (
+            {unreadTotal > 0 && (
               <span className="rounded-full bg-destructive px-2.5 py-0.5 text-sm font-semibold text-destructive-foreground">
-                {unreadCount} new
+                {unreadTotal} unread
               </span>
             )}
           </h1>
@@ -100,7 +95,7 @@ export function NotificationsPage() {
             <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />
             Refresh
           </Button>
-          {unreadCount > 0 && (
+          {unreadTotal > 0 && (
             <Button variant="secondary" size="sm" onClick={() => void handleMarkAllRead()}>
               <CheckCheck className="mr-2 h-4 w-4" />
               Mark all read

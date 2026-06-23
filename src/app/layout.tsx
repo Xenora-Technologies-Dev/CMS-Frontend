@@ -24,11 +24,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={inter.className}>
         <AuthProvider>
           <ClinicProvider>
-            <NotificationsProvider>
-              <SocketProvider>
+            <SocketProvider>
+              <NotificationsProvider>
                 <ToastProvider>{children}</ToastProvider>
-              </SocketProvider>
-            </NotificationsProvider>
+              </NotificationsProvider>
+            </SocketProvider>
           </ClinicProvider>
         </AuthProvider>
       </body>

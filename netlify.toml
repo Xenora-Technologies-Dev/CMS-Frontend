@@ -5,5 +5,5 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Set NEXT_PUBLIC_API_URL in Netlify UI to your Vercel backend URL, e.g.:
-# https://your-backend.vercel.app/api/v1
+# Set NEXT_PUBLIC_API_URL in Netlify UI to your Render backend URL, e.g.:
+# https://your-service.onrender.com/api/v1

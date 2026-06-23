@@ -1,7 +1,6 @@
 'use client';
 
 import { useNotifications } from '@/components/providers/notifications-provider';
-import { useSocketEvent } from '@/components/providers/socket-provider';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,8 +15,6 @@ import {
   useNotificationAttention,
 } from '@/hooks/use-notification-attention';
 import { primeNotificationSound } from '@/lib/notification-sound';
-import { SocketEvents } from '@/lib/socket-events';
-import type { Notification } from '@/lib/notification-api';
 import { cn } from '@/lib/utils';
 import { Bell } from 'lucide-react';
 import Link from 'next/link';
@@ -28,23 +25,18 @@ interface NotificationBellProps {
 }
 
 export function NotificationBell({ notificationsHref }: NotificationBellProps) {
-  const { notifications, unreadTotal, markRead, markAllRead } = useNotifications();
+  const { notifications, unreadTotal, hasNewAlert, markRead, markAllRead, clearNewAlert } =
+    useNotifications();
   const [open, setOpen] = useState(false);
-  const [hasNewAlert, setHasNewAlert] = useState(false);
 
-  const { showBrowserNotification } = useNotificationAttention(unreadTotal, hasNewAlert);
-
-  useSocketEvent<Notification>(SocketEvents.NOTIFICATION, (notification) => {
-    setHasNewAlert(true);
-    showBrowserNotification(notification);
-  });
+  useNotificationAttention(unreadTotal, hasNewAlert);
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
     if (next) {
       requestNotificationPermission();
       primeNotificationSound();
-      setHasNewAlert(false);
+      clearNewAlert();
     }
   }
 
@@ -127,7 +119,7 @@ export function NotificationBell({ notificationsHref }: NotificationBellProps) {
           <Link
             href={notificationsHref}
             className="w-full cursor-pointer justify-center text-center"
-            onClick={() => setHasNewAlert(false)}
+            onClick={() => clearNewAlert()}
           >
             View all notifications
           </Link>

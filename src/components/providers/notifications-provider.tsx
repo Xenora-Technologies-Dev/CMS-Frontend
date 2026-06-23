@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/components/auth/auth-provider';
-import { useSocketEvent } from '@/components/providers/socket-provider';
+import { useSocket, useSocketEvent } from '@/components/providers/socket-provider';
 import {
   listNotifications,
   markAllNotificationsRead,
@@ -21,29 +21,54 @@ import {
   type ReactNode,
 } from 'react';
 
+function showBrowserNotification(notification: Notification): void {
+  if (typeof window === 'undefined' || !('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+
+  try {
+    const instance = new Notification(notification.title, {
+      body: notification.body,
+      tag: notification.id,
+    });
+    instance.onclick = () => {
+      window.focus();
+      instance.close();
+    };
+  } catch {
+    // Browser may block notifications in some contexts
+  }
+}
+
 interface NotificationsContextValue {
   notifications: Notification[];
   unreadTotal: number;
+  hasNewAlert: boolean;
   loading: boolean;
-  refresh: () => Promise<void>;
+  refresh: (options?: { background?: boolean }) => Promise<void>;
   markRead: (id: string) => Promise<void>;
   markAllRead: () => Promise<void>;
+  clearNewAlert: () => void;
+  onRealtimeNotification: (handler: (notification: Notification) => void) => () => void;
 }
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
 
 export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { connected } = useSocket();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadTotal, setUnreadTotal] = useState(0);
+  const [hasNewAlert, setHasNewAlert] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const hasLoadedOnceRef = useRef(false);
+  const realtimeHandlersRef = useRef(new Set<(notification: Notification) => void>());
 
   const refresh = useCallback(async (options?: { background?: boolean }) => {
     if (!user) {
       setNotifications([]);
       setUnreadTotal(0);
+      setHasNewAlert(false);
       return;
     }
 
@@ -70,14 +95,28 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (connected && hasLoadedOnceRef.current) {
+      void refresh({ background: true });
+    }
+  }, [connected, refresh]);
+
   useSocketEvent<Notification>(SocketEvents.NOTIFICATION, (notification) => {
     playNotificationSound();
+    showBrowserNotification(notification);
+
     setNotifications((prev) => {
       const without = prev.filter((n) => n.id !== notification.id);
       return [notification, ...without].slice(0, 5);
     });
+
     if (!notification.readAt) {
       setUnreadTotal((count) => count + 1);
+      setHasNewAlert(true);
+    }
+
+    for (const handler of realtimeHandlersRef.current) {
+      handler(notification);
     }
   });
 
@@ -95,18 +134,43 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       prev.map((n) => ({ ...n, readAt: n.readAt ?? new Date().toISOString() })),
     );
     setUnreadTotal(0);
+    setHasNewAlert(false);
+  }, []);
+
+  const clearNewAlert = useCallback(() => {
+    setHasNewAlert(false);
+  }, []);
+
+  const onRealtimeNotification = useCallback((handler: (notification: Notification) => void) => {
+    realtimeHandlersRef.current.add(handler);
+    return () => {
+      realtimeHandlersRef.current.delete(handler);
+    };
   }, []);
 
   const value = useMemo(
     () => ({
       notifications,
       unreadTotal,
+      hasNewAlert,
       loading,
       refresh,
       markRead,
       markAllRead,
+      clearNewAlert,
+      onRealtimeNotification,
     }),
-    [notifications, unreadTotal, loading, refresh, markRead, markAllRead],
+    [
+      notifications,
+      unreadTotal,
+      hasNewAlert,
+      loading,
+      refresh,
+      markRead,
+      markAllRead,
+      clearNewAlert,
+      onRealtimeNotification,
+    ],
   );
 
   return (
