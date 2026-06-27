@@ -87,6 +87,7 @@ export interface Patient {
   lastName: string;
   medicalRecordNo: string;
   phone?: string | null;
+  whatsappNumber?: string | null;
   email?: string | null;
 }
 

@@ -1,5 +1,6 @@
 'use client';
 
+import type { BookingWhatsAppStatus } from '@/components/whatsapp/booking-whatsapp-provider';
 import type { Booking } from '@/lib/types';
 import { formatDateTime, formatTime, getPatientName, getTherapistName } from '@/lib/utils';
 import { CalendarClock, CheckCircle2, X, XCircle } from 'lucide-react';
@@ -13,6 +14,7 @@ export interface BookingActionToastPayload {
   previousStartTime?: string;
   cancellationReason?: string;
   error?: string;
+  whatsapp?: BookingWhatsAppStatus | null;
 }
 
 interface BookingActionToastProps {
@@ -21,7 +23,7 @@ interface BookingActionToastProps {
 }
 
 export function BookingActionToast({ payload, onDismiss }: BookingActionToastProps) {
-  const { action, booking, previousStartTime, cancellationReason, error } = payload;
+  const { action, booking, previousStartTime, cancellationReason, error, whatsapp } = payload;
   const isCancel = action === 'cancel';
   const isComplete = action === 'complete';
   const isError = Boolean(error);
@@ -134,13 +136,25 @@ export function BookingActionToast({ payload, onDismiss }: BookingActionToastPro
             {error ? (
               <p className="mt-3 text-xs text-destructive">{error}</p>
             ) : (
-              <div className="mt-3 flex items-center gap-1.5 text-xs text-emerald-700">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                {isCancel
-                  ? 'Cancellation saved successfully'
-                  : isComplete
-                    ? 'Booking marked as completed'
-                    : 'New schedule saved successfully'}
+              <div className="mt-3 space-y-1">
+                <div className="flex items-center gap-1.5 text-xs text-emerald-700">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {isCancel
+                    ? 'Cancellation saved successfully'
+                    : isComplete
+                      ? 'Booking marked as completed'
+                      : 'New schedule saved successfully'}
+                </div>
+                {whatsapp && !whatsapp.skipped && (
+                  <p
+                    className={`text-xs ${whatsapp.sent ? 'text-emerald-700' : 'text-amber-800'}`}
+                  >
+                    {whatsapp.sent
+                      ? 'WhatsApp confirmation sent successfully.'
+                      : whatsapp.error ??
+                        'Update saved, but the WhatsApp message could not be sent.'}
+                  </p>
+                )}
               </div>
             )}
           </div>

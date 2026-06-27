@@ -61,6 +61,7 @@ import {
 } from '@/lib/booking-validation';
 import { fetchApprovedLeaves } from '@/lib/leave-api';
 import { useToast } from '@/components/providers/toast-provider';
+import { useBookingWhatsApp } from '@/components/whatsapp/booking-whatsapp-provider';
 import { getFriendlyErrorMessage } from '@/lib/error-utils';
 import {
   getLastTherapistIdFromPlan,
@@ -133,6 +134,7 @@ export function BookingFormModal({
   onTherapyCreated,
 }: BookingFormModalProps) {
   const { showBookingSuccess } = useToast();
+  const { notifyAfterBookingAction } = useBookingWhatsApp();
   const [confirming, setConfirming] = useState(false);
   const clinicContext = useClinicOptional();
   const overrideScheduleConstraints = isAllowBookingOutsideConsultationHoursEnabled(
@@ -721,7 +723,11 @@ export function BookingFormModal({
       const saved = await persistBooking();
       onOpenChange(false);
       if (mode === 'create' && saved) {
-        showBookingSuccess(saved);
+        const whatsapp = await notifyAfterBookingAction({
+          booking: saved,
+          eventType: 'SCHEDULED',
+        });
+        showBookingSuccess(saved, whatsapp);
       }
       onSuccess();
     } catch (err) {

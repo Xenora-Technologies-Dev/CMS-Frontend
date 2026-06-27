@@ -4,6 +4,7 @@ import { PaginationControls } from '@/components/shared/pagination-controls';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { listAuditLogs, type AuditLogItem } from '@/lib/audit-log-api';
 import type { PaginatedMeta } from '@/lib/types';
+import { formatDateTime } from '@/lib/utils';
 import { History, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -84,16 +85,23 @@ export default function ActivityLogPage() {
                         {log.entityId ? ` · ${log.entityId.slice(0, 8)}` : ''}
                       </p>
                     )}
+                    {log.detail && (
+                      <pre
+                        className={`mt-2 max-w-full overflow-x-auto rounded-md border px-3 py-2 text-xs ${
+                          log.entityType === 'WhatsAppMessage' &&
+                          log.newValues &&
+                          typeof log.newValues === 'object' &&
+                          (log.newValues as Record<string, unknown>).status === 'failed'
+                            ? 'border-amber-200 bg-amber-50 text-amber-950 whitespace-pre-wrap'
+                            : 'border-slate-200 bg-slate-50 text-muted-foreground whitespace-pre-wrap'
+                        }`}
+                      >
+                        {log.detail}
+                      </pre>
+                    )}
                   </div>
                   <time className="shrink-0 text-xs text-muted-foreground">
-                    {new Date(log.createdAt).toLocaleString('en-GB', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: true,
-                    })}
+                    {formatDateTime(log.createdAt)}
                   </time>
                 </li>
               ))}

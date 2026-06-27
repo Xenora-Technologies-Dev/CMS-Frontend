@@ -1,7 +1,7 @@
 'use client';
 
 import type { Room, Therapist, Therapy } from '@/lib/types';
-import { formatTime, formatTimeInputValue, getPatientName, getTherapistName } from '@/lib/utils';
+import { formatDate, formatTime, formatTimeInputValue, getPatientName, getTherapistName } from '@/lib/utils';
 import { BookingStatusBadge } from '@/components/booking/booking-status-badge';
 import { Separator } from '@/components/ui/separator';
 import { Calendar, Clock, DoorOpen, Stethoscope, User } from 'lucide-react';
@@ -25,12 +25,7 @@ export function BookingSummary({
   startTime,
   endTime,
 }: BookingSummaryProps) {
-  const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const formattedDate = formatDate(date + 'T00:00:00');
 
   const items = [
     { icon: User, label: 'Patient', value: patientName },

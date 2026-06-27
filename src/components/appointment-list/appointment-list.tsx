@@ -31,6 +31,7 @@ import { useBackgroundLoadState } from '@/hooks/use-background-load-state';
 import { useDebouncedCallback } from '@/hooks/use-debounced-callback';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useToast } from '@/components/providers/toast-provider';
+import { useBookingWhatsApp } from '@/components/whatsapp/booking-whatsapp-provider';
 import { useCallback, useEffect, useState } from 'react';
 import { useSocketEvent } from '@/components/providers/socket-provider';
 import { SocketEvents } from '@/lib/socket-events';
@@ -40,6 +41,7 @@ const RESOURCE_LIMIT = 100;
 
 export function AppointmentList() {
   const { showBookingAction } = useToast();
+  const { notifyAfterBookingAction } = useBookingWhatsApp();
   const [filters, setFilters] = useState<AppointmentListFiltersState>(DEFAULT_APPOINTMENT_FILTERS);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -175,10 +177,15 @@ export function AppointmentList() {
       cancellationReason: reason || undefined,
     });
     setCancelOpen(false);
+    const whatsapp = await notifyAfterBookingAction({
+      booking: updated,
+      eventType: 'CANCELLED',
+    });
     showBookingAction({
       action: 'cancel',
       booking: updated,
       cancellationReason: reason || undefined,
+      whatsapp,
     });
     await loadBookings({ background: true });
   }

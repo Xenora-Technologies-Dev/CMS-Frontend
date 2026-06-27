@@ -15,7 +15,7 @@ import {
   useNotificationAttention,
 } from '@/hooks/use-notification-attention';
 import { primeNotificationSound } from '@/lib/notification-sound';
-import { cn } from '@/lib/utils';
+import { cn, formatDateTime } from '@/lib/utils';
 import { Bell } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -103,13 +103,7 @@ export function NotificationBell({ notificationsHref }: NotificationBellProps) {
               </span>
               <span className="line-clamp-2 text-xs text-muted-foreground">{n.body}</span>
               <span className="text-[10px] text-muted-foreground">
-                {new Date(n.createdAt).toLocaleString('en-GB', {
-                  day: 'numeric',
-                  month: 'short',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: true,
-                })}
+                {formatDateTime(n.createdAt)}
               </span>
             </DropdownMenuItem>
           ))

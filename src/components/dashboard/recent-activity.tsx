@@ -1,5 +1,5 @@
 import type { ActivityItem } from '@/lib/dashboard-api';
-import { cn } from '@/lib/utils';
+import { cn, formatDateTime } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CalendarCheck, CalendarPlus, CalendarX, Clock } from 'lucide-react';
 
@@ -49,13 +49,7 @@ export function RecentActivity({ items, viewMoreHref }: RecentActivityProps) {
                     <p className="text-sm font-medium text-slate-900">{item.label}</p>
                     <p className="truncate text-xs text-muted-foreground">{item.detail}</p>
                     <p className="mt-0.5 text-[10px] text-muted-foreground">
-                      {new Date(item.timestamp).toLocaleString('en-GB', {
-                        day: 'numeric',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: true,
-                      })}
+                      {formatDateTime(item.timestamp)}
                     </p>
                   </div>
                 </li>

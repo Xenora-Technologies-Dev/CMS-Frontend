@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { getUser } from '@/lib/user-api';
 import type { UserListItem, UserRole } from '@/lib/types';
+import { formatDateTime } from '@/lib/utils';
 import { Loader2, Shield, UserCog } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -107,16 +108,7 @@ export function UserViewDialog({ user, open, onOpenChange }: UserViewDialogProps
           <div className="flex items-start justify-between gap-4">
             <dt className="shrink-0 text-muted-foreground">Last login</dt>
             <dd className="text-right font-medium">
-              {user.lastLoginAt
-                ? new Date(user.lastLoginAt).toLocaleString('en-GB', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true,
-                  })
-                : 'Never'}
+              {user.lastLoginAt ? formatDateTime(user.lastLoginAt) : 'Never'}
             </dd>
           </div>
         </dl>

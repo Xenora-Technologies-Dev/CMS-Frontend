@@ -17,10 +17,12 @@ import { Label } from '@/components/ui/label';
 import {
   isAllowBookingOutsideConsultationHoursEnabled,
   isAutoDownloadSlipsEnabled,
+  isWhatsAppConfirmationPromptEnabled,
+  isWhatsAppMessagingEnabled,
   updateCurrentClinic,
 } from '@/lib/clinic-api';
 
-import { Building2, CalendarClock, Download, Loader2, MapPin, Phone, Mail } from 'lucide-react';
+import { Building2, CalendarClock, Download, Loader2, MapPin, MessageCircle, Phone, Mail } from 'lucide-react';
 
 import { useEffect, useState } from 'react';
 
@@ -46,6 +48,9 @@ export default function ClinicSettingsPage() {
 
   const [allowBookingOutsideConsultationHours, setAllowBookingOutsideConsultationHours] =
     useState(false);
+
+  const [whatsappAppointmentMessaging, setWhatsappAppointmentMessaging] = useState(true);
+  const [whatsappConfirmationPrompt, setWhatsappConfirmationPrompt] = useState(true);
 
   const [saving, setSaving] = useState(false);
 
@@ -76,6 +81,8 @@ export default function ClinicSettingsPage() {
     setAllowBookingOutsideConsultationHours(
       isAllowBookingOutsideConsultationHoursEnabled(clinic),
     );
+    setWhatsappAppointmentMessaging(isWhatsAppMessagingEnabled(clinic));
+    setWhatsappConfirmationPrompt(isWhatsAppConfirmationPromptEnabled(clinic));
 
   }, [clinic]);
 
@@ -107,7 +114,14 @@ export default function ClinicSettingsPage() {
 
         email: email.trim() || null,
 
-        settings: { autoDownloadSlips, allowBookingOutsideConsultationHours },
+        settings: {
+          autoDownloadSlips,
+          allowBookingOutsideConsultationHours,
+          whatsappAppointmentMessaging,
+          whatsappConfirmationPrompt: whatsappAppointmentMessaging
+            ? whatsappConfirmationPrompt
+            : true,
+        },
 
       });
 
@@ -414,6 +428,164 @@ export default function ClinicSettingsPage() {
                   className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
 
                     autoDownloadSlips ? 'translate-x-5' : 'translate-x-0.5'
+
+                  }`}
+
+                />
+
+              </button>
+
+            </label>
+
+          </CardContent>
+
+        </Card>
+
+
+
+        <Card>
+
+          <CardHeader>
+
+            <div className="flex items-center gap-3">
+
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+
+                <MessageCircle className="h-5 w-5 text-primary" />
+
+              </div>
+
+              <div>
+
+                <CardTitle>WhatsApp Messaging</CardTitle>
+
+                <CardDescription>
+
+                  Send appointment confirmations, cancellations, and reschedule updates via WhatsApp
+
+                </CardDescription>
+
+              </div>
+
+            </div>
+
+          </CardHeader>
+
+          <CardContent className="space-y-3">
+
+            <label className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border px-4 py-3">
+
+              <div>
+
+                <p className="font-medium text-slate-900">WhatsApp appointment messaging</p>
+
+                <p className="mt-1 text-sm text-muted-foreground">
+
+                  When enabled, staff can send WhatsApp updates after booking, cancelling, or
+
+                  postponing appointments. Requires server-side WhatsApp API credentials.
+
+                </p>
+
+              </div>
+
+              <button
+
+                type="button"
+
+                role="switch"
+
+                aria-checked={whatsappAppointmentMessaging}
+
+                aria-label="WhatsApp appointment messaging"
+
+                onClick={() => setWhatsappAppointmentMessaging((prev) => !prev)}
+
+                className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors ${
+
+                  whatsappAppointmentMessaging ? 'bg-primary' : 'bg-slate-200'
+
+                }`}
+
+              >
+
+                <span
+
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+
+                    whatsappAppointmentMessaging ? 'translate-x-5' : 'translate-x-0.5'
+
+                  }`}
+
+                />
+
+              </button>
+
+            </label>
+
+
+
+            <label
+
+              className={`flex items-start justify-between gap-4 rounded-lg border px-4 py-3 ${
+
+                whatsappAppointmentMessaging ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+
+              }`}
+
+            >
+
+              <div>
+
+                <p className="font-medium text-slate-900">WhatsApp confirmation prompt</p>
+
+                <p className="mt-1 text-sm text-muted-foreground">
+
+                  When enabled, staff are asked before each WhatsApp message is sent. When
+
+                  disabled, messages are sent automatically and the result is shown after the
+
+                  action.
+
+                </p>
+
+              </div>
+
+              <button
+
+                type="button"
+
+                role="switch"
+
+                aria-checked={whatsappConfirmationPrompt}
+
+                aria-label="WhatsApp confirmation prompt"
+
+                disabled={!whatsappAppointmentMessaging}
+
+                onClick={() => setWhatsappConfirmationPrompt((prev) => !prev)}
+
+                className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors ${
+
+                  whatsappAppointmentMessaging && whatsappConfirmationPrompt
+
+                    ? 'bg-primary'
+
+                    : 'bg-slate-200'
+
+                }`}
+
+              >
+
+                <span
+
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+
+                    whatsappAppointmentMessaging && whatsappConfirmationPrompt
+
+                      ? 'translate-x-5'
+
+                      : 'translate-x-0.5'
 
                   }`}
 

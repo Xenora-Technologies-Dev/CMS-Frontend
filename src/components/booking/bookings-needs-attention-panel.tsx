@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { useToast } from '@/components/providers/toast-provider';
+import { useBookingWhatsApp } from '@/components/whatsapp/booking-whatsapp-provider';
 import { BookingRescheduleModal } from '@/components/booking/booking-reschedule-modal';
 import { CancelBookingDialog } from '@/components/booking/booking-dialogs';
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,7 @@ export function BookingsNeedsAttentionPanel({
 }: BookingsNeedsAttentionPanelProps) {
   const { user } = useAuth();
   const { showBookingAction } = useToast();
+  const { notifyAfterBookingAction } = useBookingWhatsApp();
   const canManageBookings = user?.role === 'ADMIN';
   const [bookings, setBookings] = useState<BookingNeedingAttention[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -202,10 +204,15 @@ export function BookingsNeedsAttentionPanel({
                 cancellationReason: reason,
               });
               setCancelBookingId(null);
+              const whatsapp = await notifyAfterBookingAction({
+                booking: updated,
+                eventType: 'CANCELLED',
+              });
               showBookingAction({
                 action: 'cancel',
                 booking: updated,
                 cancellationReason: reason,
+                whatsapp,
               });
               handleActionDone();
             }}

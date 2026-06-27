@@ -1,6 +1,7 @@
 import { apiRequestPaginated } from './api';
 import { listBookings } from './booking-api';
-import type { Booking } from './types';import { endOfDay, startOfDay } from './utils';
+import type { Booking } from './types';
+import { endOfDay, formatDateTime, startOfDay } from './utils';
 
 export interface DashboardStats {
   totalPatients: number;
@@ -88,13 +89,7 @@ function deriveRecentActivity(bookings: Booking[], limit = 5): ActivityItem[] {
           ? `Dr. ${booking.doctor.user.firstName} ${booking.doctor.user.lastName}`
           : 'Consultation'
         : (booking.therapy?.name ?? 'Appointment');
-    const time = `${label} · ${new Date(booking.startTime).toLocaleString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    })}`;
+    const time = `${label} · ${formatDateTime(booking.startTime)}`;
 
     if (booking.status === 'CANCELLED') {
       return {

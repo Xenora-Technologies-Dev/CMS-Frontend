@@ -1,4 +1,5 @@
 import type { Booking, BookingStatus } from '@/lib/types';
+import { formatDateTime as formatDateTimeValue } from '@/lib/utils';
 
 const ACTIVE_STATUSES: BookingStatus[] = [
   'SCHEDULED',
@@ -49,12 +50,5 @@ export function formatUserName(user?: { firstName: string; lastName: string } | 
 
 export function formatDateTime(iso?: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-US', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return formatDateTimeValue(iso);
 }

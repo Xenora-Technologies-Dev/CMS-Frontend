@@ -1,5 +1,6 @@
 'use client';
 
+import type { BookingWhatsAppStatus } from '@/components/whatsapp/booking-whatsapp-provider';
 import { useClinicOptional } from '@/components/providers/clinic-provider';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,16 +10,17 @@ import {
 } from '@/lib/appointment-slip-utils';
 import { isAutoDownloadSlipsEnabled } from '@/lib/clinic-api';
 import type { Booking } from '@/lib/types';
-import { getPatientName, getTherapistName } from '@/lib/utils';
+import { formatDateTime, getPatientName, getTherapistName } from '@/lib/utils';
 import { CheckCircle2, Download, ExternalLink, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface BookingSuccessToastProps {
   booking: Booking;
+  whatsapp?: BookingWhatsAppStatus | null;
   onDismiss: () => void;
 }
 
-export function BookingSuccessToast({ booking, onDismiss }: BookingSuccessToastProps) {
+export function BookingSuccessToast({ booking, whatsapp, onDismiss }: BookingSuccessToastProps) {
   const clinicContext = useClinicOptional();
   const autoDownloadEnabled = isAutoDownloadSlipsEnabled(clinicContext?.clinic);
   const [slipLoading, setSlipLoading] = useState<'view' | 'download' | null>(null);
@@ -42,15 +44,7 @@ export function BookingSuccessToast({ booking, onDismiss }: BookingSuccessToastP
     };
   }, [booking, autoDownloadEnabled]);
 
-  const therapyTime = new Date(booking.startTime).toLocaleString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  const therapyTime = formatDateTime(booking.startTime);
 
   async function handleViewSlip() {
     setSlipError(null);
@@ -118,6 +112,19 @@ export function BookingSuccessToast({ booking, onDismiss }: BookingSuccessToastP
             </dl>
 
             {slipError && <p className="mt-2 text-xs text-destructive">{slipError}</p>}
+
+            {whatsapp && !whatsapp.skipped && (
+              <p
+                className={`mt-2 text-xs ${
+                  whatsapp.sent ? 'text-emerald-700' : 'text-amber-800'
+                }`}
+              >
+                {whatsapp.sent
+                  ? 'WhatsApp confirmation sent successfully.'
+                  : whatsapp.error ??
+                    'Booking saved, but the WhatsApp message could not be sent.'}
+              </p>
+            )}
 
             <div className="mt-3 flex flex-wrap gap-2">
               <Button

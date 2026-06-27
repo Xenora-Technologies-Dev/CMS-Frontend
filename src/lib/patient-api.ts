@@ -17,6 +17,7 @@ export interface CreatePatientPayload {
   gender?: string;
   email?: string;
   phone?: string;
+  whatsappNumber?: string | null;
   alternatePhone?: string;
   nationality?: string;
   emiratesId?: string;

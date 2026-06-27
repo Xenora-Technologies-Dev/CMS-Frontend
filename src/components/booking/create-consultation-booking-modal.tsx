@@ -5,6 +5,7 @@ import { PatientSearch } from '@/components/booking/patient-search';
 import { QuickAddPatientDialog } from '@/components/booking/quick-add-patient-dialog';
 import { useSocketEvent } from '@/components/providers/socket-provider';
 import { useToast } from '@/components/providers/toast-provider';
+import { useBookingWhatsApp } from '@/components/whatsapp/booking-whatsapp-provider';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -73,6 +74,7 @@ export function CreateConsultationBookingModal({
   onSuccess,
 }: CreateConsultationBookingModalProps) {
   const { showBookingSuccess } = useToast();
+  const { notifyAfterBookingAction } = useBookingWhatsApp();
   const [patientId, setPatientId] = useState('');
   const [doctorId, setDoctorId] = useState('');
   const [roomId, setRoomId] = useState('');
@@ -261,7 +263,11 @@ export function CreateConsultationBookingModal({
         notes: notes.trim() || undefined,
       });
       onOpenChange(false);
-      showBookingSuccess(booking);
+      const whatsapp = await notifyAfterBookingAction({
+        booking,
+        eventType: 'SCHEDULED',
+      });
+      showBookingSuccess(booking, whatsapp);
       void onSuccess();
     } catch (err) {
       setError(getFriendlyErrorMessage(err, 'Failed to create consultation booking'));

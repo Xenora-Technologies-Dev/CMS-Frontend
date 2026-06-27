@@ -20,6 +20,7 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { getFeaturesForRole } from '@/lib/permissions';
 import { listUsers, setUserStatus } from '@/lib/user-api';
 import type { PaginatedMeta, UserListItem, UserRole } from '@/lib/types';
+import { formatDateTime } from '@/lib/utils';
 import { Plus, Shield, UserCog, Eye, Pencil } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -198,16 +199,7 @@ export function UserList() {
                         <ActiveStatusBadge isActive={user.isActive} />
                       </td>
                       <td className="hidden px-4 py-3 text-muted-foreground lg:table-cell">
-                        {user.lastLoginAt
-                          ? new Date(user.lastLoginAt).toLocaleString('en-GB', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              hour12: true,
-                            })
-                          : 'Never'}
+                        {user.lastLoginAt ? formatDateTime(user.lastLoginAt) : 'Never'}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex flex-wrap items-center justify-end gap-2">

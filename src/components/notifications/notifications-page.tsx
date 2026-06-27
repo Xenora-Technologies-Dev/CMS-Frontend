@@ -9,7 +9,7 @@ import { listNotifications, type Notification } from '@/lib/notification-api';
 import { useNotificationAttention } from '@/hooks/use-notification-attention';
 import { Bell, CheckCheck, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { cn } from '@/lib/utils';
+import { cn, formatDateTime } from '@/lib/utils';
 
 export function NotificationsPage() {
   const { unreadTotal, markRead, markAllRead, clearNewAlert, onRealtimeNotification } =
@@ -142,14 +142,7 @@ export function NotificationsPage() {
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">{n.body}</p>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    {new Date(n.createdAt).toLocaleString('en-GB', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: true,
-                    })}
+                    {formatDateTime(n.createdAt)}
                   </p>
                 </button>
               ))}

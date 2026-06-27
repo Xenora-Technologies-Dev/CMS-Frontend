@@ -18,7 +18,7 @@ import {
   formatUserName,
   getAppointmentCardBorderClass,
 } from '@/lib/appointment-list-utils';
-import { formatTime, getDoctorName, getPatientName, getTherapistName } from '@/lib/utils';
+import { formatDate, formatTime, getDoctorName, getPatientName, getTherapistName } from '@/lib/utils';
 import {
   CheckCircle2,
   Calendar,
@@ -61,12 +61,7 @@ export function AppointmentListCard({
   const editable = canEditBooking(booking);
   const completable = canCompleteBooking(booking);
   const restorable = canRestoreBooking(booking);
-  const appointmentDate = new Date(booking.startTime).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  const appointmentDate = formatDate(booking.startTime);
 
   return (
     <article

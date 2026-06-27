@@ -202,13 +202,7 @@ export function TherapistDashboard() {
                       <p className="font-medium text-slate-900">{n.title}</p>
                       <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.body}</p>
                       <p className="mt-1 text-[10px] text-muted-foreground">
-                        {new Date(n.createdAt).toLocaleString('en-GB', {
-                          day: 'numeric',
-                          month: 'short',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: true,
-                        })}
+                        {formatDateTime(n.createdAt)}
                       </p>
                     </button>
                   ))}

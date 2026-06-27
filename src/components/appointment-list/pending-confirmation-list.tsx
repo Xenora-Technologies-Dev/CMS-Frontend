@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/components/providers/toast-provider';
+import { useBookingWhatsApp } from '@/components/whatsapp/booking-whatsapp-provider';
 import { useBackgroundLoadState } from '@/hooks/use-background-load-state';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { cancelBooking, completeBooking, listBookings } from '@/lib/booking-api';
@@ -33,6 +34,7 @@ import { listRooms } from '@/lib/room-api';
 import { listTherapists } from '@/lib/therapist-api';
 import type { Booking, BookingType, Doctor, PaginatedMeta, Room, Therapist } from '@/lib/types';
 import {
+  formatDate,
   formatTime,
   getDoctorName,
   getPatientName,
@@ -119,12 +121,7 @@ function PendingRow({
           {staffLabel}
         </p>
         <p className="text-xs text-muted-foreground">
-          {new Date(booking.startTime).toLocaleDateString('en-GB', {
-            weekday: 'short',
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-          })}
+          {formatDate(booking.startTime)}
           {' · '}
           {formatTime(booking.startTime)} – {formatTime(booking.endTime)}
           {booking.room?.name ? ` · ${booking.room.name}` : ''}
@@ -171,6 +168,7 @@ function PendingRow({
 
 export function PendingConfirmationList() {
   const { showBookingAction } = useToast();
+  const { notifyAfterBookingAction } = useBookingWhatsApp();
   const [filters, setFilters] = useState<PendingFilters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -523,10 +521,15 @@ export function PendingConfirmationList() {
             cancellationReason: reason || undefined,
           });
           setCancelOpen(false);
+          const whatsapp = await notifyAfterBookingAction({
+            booking: updated,
+            eventType: 'CANCELLED',
+          });
           showBookingAction({
             action: 'cancel',
             booking: updated,
             cancellationReason: reason,
+            whatsapp,
           });
           void loadBookings({ background: true });
         }}

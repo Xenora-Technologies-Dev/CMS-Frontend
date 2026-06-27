@@ -5,21 +5,37 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const DATE_LOCALE = 'en-GB';
+
+const DATE_FORMAT: Intl.DateTimeFormatOptions = {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+};
+
+const DATE_TIME_FORMAT: Intl.DateTimeFormatOptions = {
+  ...DATE_FORMAT,
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+};
+
 export function formatTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
+/** Date only in DD/MM/YYYY format. */
+export function formatDate(date: Date | string | null | undefined): string {
+  if (!date) return '—';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleDateString(DATE_LOCALE, DATE_FORMAT);
+}
+
+/** Date and time in DD/MM/YYYY format. */
 export function formatDateTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleString('en-US', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return d.toLocaleString(DATE_LOCALE, DATE_TIME_FORMAT);
 }
 
 export function formatDateInput(date: Date): string {

@@ -10,8 +10,7 @@ import { listTherapists } from '@/lib/therapist-api';
 import { listTherapies } from '@/lib/therapy-api';
 import { listPublicHolidays } from '@/lib/holiday-api';
 import type { Booking, PublicHoliday, Room, Therapist, Therapy } from '@/lib/types';
-import { endOfDay, startOfDay } from '@/lib/utils';
-import { cn, getTherapistName } from '@/lib/utils';
+import { cn, endOfDay, formatDate, getTherapistName, startOfDay } from '@/lib/utils';
 import { CalendarFilters } from '@/components/booking/calendar-filters';
 import {
   BookingDetailDialog,
@@ -32,6 +31,7 @@ import { Plus, RefreshCw } from 'lucide-react';
 import { useDebouncedCallback } from '@/hooks/use-debounced-callback';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/components/providers/toast-provider';
+import { useBookingWhatsApp } from '@/components/whatsapp/booking-whatsapp-provider';
 import { useSocketEvent } from '@/components/providers/socket-provider';
 import { useClinicOptional } from '@/components/providers/clinic-provider';
 import { formatClinicLocation, getClinicDisplayName } from '@/lib/clinic-api';
@@ -54,6 +54,7 @@ export function BookingCalendar({
   pageDescription = 'Daily view · 15-minute slots · therapy rooms · therapist color coding',
 }: BookingCalendarProps = {}) {
   const { showBookingAction } = useToast();
+  const { notifyAfterBookingAction } = useBookingWhatsApp();
   const clinicContext = useClinicOptional();
   const clinic = clinicContext?.clinic;
   const clinicName = getClinicDisplayName(clinic);
@@ -68,6 +69,7 @@ export function BookingCalendar({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasLoadedOnce = useRef(false);
+  const loadRequestIdRef = useRef(0);
 
   const [filterTherapistId, setFilterTherapistId] = useState<string>(
     lockedTherapistId ?? ALL_VALUE,
@@ -108,6 +110,7 @@ export function BookingCalendar({
 
   const loadData = useCallback(
     async (options?: { background?: boolean }) => {
+      const requestId = ++loadRequestIdRef.current;
       const isBackground = options?.background && hasLoadedOnce.current;
       if (isBackground) {
         setRefreshing(true);
@@ -115,6 +118,8 @@ export function BookingCalendar({
         setInitialLoading(true);
       } else {
         setRefreshing(true);
+        setBookings([]);
+        setHolidays([]);
       }
       setError(null);
       try {
@@ -130,6 +135,7 @@ export function BookingCalendar({
               dateTo: endOfDay(selectedDate).toISOString(),
             }),
           ]);
+        if (requestId !== loadRequestIdRef.current) return;
         setBookings(dayBookings);
         setTherapists(
           lockedTherapistId
@@ -141,8 +147,10 @@ export function BookingCalendar({
         setHolidays(holidayResult.data);
         hasLoadedOnce.current = true;
       } catch (err) {
+        if (requestId !== loadRequestIdRef.current) return;
         setError(err instanceof Error ? err.message : 'Failed to load calendar data');
       } finally {
+        if (requestId !== loadRequestIdRef.current) return;
         setInitialLoading(false);
         setRefreshing(false);
       }
@@ -221,10 +229,15 @@ export function BookingCalendar({
     });
     setCancelOpen(false);
     setDetailOpen(false);
+    const whatsapp = await notifyAfterBookingAction({
+      booking: updated,
+      eventType: 'CANCELLED',
+    });
     showBookingAction({
       action: 'cancel',
       booking: updated,
       cancellationReason: reason || undefined,
+      whatsapp,
     });
     await loadData({ background: true });
   }
@@ -236,12 +249,7 @@ export function BookingCalendar({
     await loadData({ background: true });
   }
 
-  const dateLabel = selectedDate.toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const dateLabel = formatDate(selectedDate);
 
   const resourcesReady =
     therapists.length > 0 && rooms.length > 0 && therapies.length > 0;
@@ -371,7 +379,7 @@ export function BookingCalendar({
             </div>
           )}
 
-          {initialLoading && bookings.length === 0 ? (
+          {(initialLoading || refreshing) && bookings.length === 0 ? (
             <div className="rounded-lg border p-12 text-center text-sm text-muted-foreground">
               Loading schedule…
             </div>

@@ -3,6 +3,8 @@ import { apiRequest } from './api';
 export interface ClinicSettings {
   autoDownloadSlips: boolean;
   allowBookingOutsideConsultationHours: boolean;
+  whatsappAppointmentMessaging: boolean;
+  whatsappConfirmationPrompt: boolean;
 }
 
 export interface Clinic {
@@ -38,6 +40,14 @@ export function isAllowBookingOutsideConsultationHoursEnabled(
   clinic: Clinic | null | undefined,
 ): boolean {
   return clinic?.settings?.allowBookingOutsideConsultationHours === true;
+}
+
+export function isWhatsAppMessagingEnabled(clinic: Clinic | null | undefined): boolean {
+  return clinic?.settings?.whatsappAppointmentMessaging !== false;
+}
+
+export function isWhatsAppConfirmationPromptEnabled(clinic: Clinic | null | undefined): boolean {
+  return clinic?.settings?.whatsappConfirmationPrompt !== false;
 }
 
 export async function getCurrentClinic(): Promise<{ clinic: Clinic }> {

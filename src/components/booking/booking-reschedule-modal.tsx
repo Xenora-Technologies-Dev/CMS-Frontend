@@ -66,6 +66,7 @@ import {
   toTimeInputValue,
 } from '@/lib/utils';
 import { useToast } from '@/components/providers/toast-provider';
+import { useBookingWhatsApp } from '@/components/whatsapp/booking-whatsapp-provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface BookingRescheduleModalProps {
@@ -95,6 +96,7 @@ export function BookingRescheduleModal({
   onSuccess,
 }: BookingRescheduleModalProps) {
   const { showBookingAction } = useToast();
+  const { notifyAfterBookingAction } = useBookingWhatsApp();
   const clinicContext = useClinicOptional();
   const isConsultation = booking?.bookingType === 'CONSULTATION';
   const overrideScheduleConstraints = isAllowBookingOutsideConsultationHoursEnabled(
@@ -525,10 +527,16 @@ export function BookingRescheduleModal({
       };
       const { booking: updated } = await rescheduleBooking(booking.id, payload);
       onOpenChange(false);
+      const whatsapp = await notifyAfterBookingAction({
+        booking: updated,
+        eventType: 'RESCHEDULED',
+        previousStartTime,
+      });
       showBookingAction({
         action: 'postpone',
         booking: updated,
         previousStartTime,
+        whatsapp,
       });
       onSuccess(updated.startTime);
     } catch (err) {

@@ -2,7 +2,7 @@
 
 import type { Booking } from '@/lib/types';
 import { formatClinicLocation, getClinicDisplayName, type Clinic } from '@/lib/clinic-api';
-import { formatTime, getDoctorName, getPatientName } from '@/lib/utils';
+import { formatDate, formatTime, getDoctorName, getPatientName } from '@/lib/utils';
 import {
   downloadAppointmentSlipPdf,
   printAppointmentSlipPdf,
@@ -86,12 +86,7 @@ export function AppointmentSlipDialog({
   const clinicLocation = clinic ? formatClinicLocation(clinic) : null;
   const clinicPhone = clinic?.phone?.trim() || null;
 
-  const appointmentDate = new Date(booking.startTime).toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const appointmentDate = formatDate(booking.startTime);
 
   const isBusy = busy !== null;
   const isConsultation = booking.bookingType === 'CONSULTATION';

@@ -33,6 +33,8 @@ const emptyForm = {
   gender: '',
   email: '',
   phone: '',
+  whatsappNumber: '',
+  phoneSameAsWhatsapp: true,
   alternatePhone: '',
   nationality: '',
   emiratesId: '',
@@ -65,6 +67,8 @@ export function PatientForm({ mode, patientId }: PatientFormProps) {
         gender: data.gender ?? '',
         email: data.email ?? '',
         phone: data.phone ?? '',
+        whatsappNumber: data.whatsappNumber ?? '',
+        phoneSameAsWhatsapp: !data.whatsappNumber,
         alternatePhone: data.alternatePhone ?? '',
         nationality: data.nationality ?? '',
         emiratesId: data.emiratesId ?? '',
@@ -101,6 +105,12 @@ export function PatientForm({ mode, patientId }: PatientFormProps) {
       gender: form.gender.trim() || undefined,
       email: form.email.trim() || undefined,
       phone: form.phone.trim() || undefined,
+      whatsappNumber:
+        mode === 'create'
+          ? form.phoneSameAsWhatsapp
+            ? null
+            : form.whatsappNumber.trim() || undefined
+          : form.whatsappNumber.trim() || undefined,
       alternatePhone: form.alternatePhone.trim() || undefined,
       nationality: form.nationality.trim() || undefined,
       emiratesId: form.emiratesId.trim() || undefined,
@@ -218,6 +228,40 @@ export function PatientForm({ mode, patientId }: PatientFormProps) {
                 onChange={(e) => updateField('phone', e.target.value)}
               />
             </div>
+            {mode === 'create' ? (
+              <>
+                <label className="flex cursor-pointer items-center gap-2 text-sm sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300"
+                    checked={form.phoneSameAsWhatsapp}
+                    onChange={(e) => updateField('phoneSameAsWhatsapp', e.target.checked)}
+                  />
+                  Phone and WhatsApp number are the same
+                </label>
+                {!form.phoneSameAsWhatsapp && (
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="whatsappNumber">WhatsApp number</Label>
+                    <Input
+                      id="whatsappNumber"
+                      value={form.whatsappNumber}
+                      onChange={(e) => updateField('whatsappNumber', e.target.value)}
+                      placeholder="05XXXXXXXX"
+                    />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="whatsappNumber">WhatsApp number</Label>
+                <Input
+                  id="whatsappNumber"
+                  value={form.whatsappNumber}
+                  onChange={(e) => updateField('whatsappNumber', e.target.value)}
+                  placeholder="Leave blank if same as phone"
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="alternatePhone">Alternate phone</Label>
               <Input

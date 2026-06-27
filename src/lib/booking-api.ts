@@ -194,6 +194,26 @@ export async function cancelBooking(
   });
 }
 
+export type BookingWhatsAppEventType = 'SCHEDULED' | 'CANCELLED' | 'RESCHEDULED';
+
+export interface BookingWhatsAppResult {
+  sent: boolean;
+  skipped?: boolean;
+  message?: string;
+  error?: string;
+  recipient?: string;
+}
+
+export async function sendBookingWhatsApp(
+  bookingId: string,
+  payload: { eventType: BookingWhatsAppEventType; previousStartTime?: string },
+): Promise<BookingWhatsAppResult> {
+  return apiRequest<BookingWhatsAppResult>(`/bookings/${bookingId}/whatsapp`, {
+    method: 'POST',
+    body: payload,
+  });
+}
+
 export async function completeBooking(
   id: string,
   notes?: string,

@@ -25,6 +25,8 @@ export function QuickAddPatientDialog({ open, onOpenChange, onCreated }: QuickAd
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [phoneSameAsWhatsapp, setPhoneSameAsWhatsapp] = useState(true);
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,6 +35,8 @@ export function QuickAddPatientDialog({ open, onOpenChange, onCreated }: QuickAd
     setFirstName('');
     setLastName('');
     setPhone('');
+    setWhatsappNumber('');
+    setPhoneSameAsWhatsapp(true);
     setEmail('');
     setError(null);
   }
@@ -54,6 +58,16 @@ export function QuickAddPatientDialog({ open, onOpenChange, onCreated }: QuickAd
       setError('Mobile must be a valid UAE number (05XXXXXXXX)');
       return;
     }
+    if (!phoneSameAsWhatsapp) {
+      if (!whatsappNumber.trim()) {
+        setError('WhatsApp number is required when it differs from mobile');
+        return;
+      }
+      if (!isValidUaeMobile(whatsappNumber.trim())) {
+        setError('WhatsApp number must be a valid UAE number (05XXXXXXXX)');
+        return;
+      }
+    }
 
     setLoading(true);
     try {
@@ -61,6 +75,7 @@ export function QuickAddPatientDialog({ open, onOpenChange, onCreated }: QuickAd
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         phone: phone.trim(),
+        whatsappNumber: phoneSameAsWhatsapp ? null : whatsappNumber.trim(),
         email: email.trim() || undefined,
       });
       onCreated({
@@ -69,6 +84,7 @@ export function QuickAddPatientDialog({ open, onOpenChange, onCreated }: QuickAd
         lastName: patient.lastName,
         medicalRecordNo: patient.medicalRecordNo,
         phone: patient.phone,
+        whatsappNumber: patient.whatsappNumber,
       });
       reset();
       onOpenChange(false);
@@ -116,6 +132,27 @@ export function QuickAddPatientDialog({ open, onOpenChange, onCreated }: QuickAd
               required
             />
           </div>
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300"
+              checked={phoneSameAsWhatsapp}
+              onChange={(e) => setPhoneSameAsWhatsapp(e.target.checked)}
+            />
+            Phone and WhatsApp number are the same
+          </label>
+          {!phoneSameAsWhatsapp && (
+            <div className="space-y-2">
+              <Label htmlFor="quick-whatsapp">WhatsApp number *</Label>
+              <Input
+                id="quick-whatsapp"
+                value={whatsappNumber}
+                onChange={(e) => setWhatsappNumber(e.target.value)}
+                placeholder="05XXXXXXXX"
+                required
+              />
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="quick-email">Email</Label>
             <Input

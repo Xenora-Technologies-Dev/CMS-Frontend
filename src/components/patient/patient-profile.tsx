@@ -3,7 +3,7 @@
 import { fetchPatientBookings, fetchPatientProfile } from '@/lib/booking-api';
 import { listTreatmentPlans } from '@/lib/treatment-plan-api';
 import type { Booking, PatientProfile, TreatmentPlan } from '@/lib/types';
-import { cn, formatDateTime, getPatientName, getTherapistName } from '@/lib/utils';
+import { cn, formatDate, formatDateTime, getPatientName, getTherapistName } from '@/lib/utils';
 import { BookingStatusBadge } from '@/components/booking/booking-status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,15 +24,6 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-
-function formatDate(date: string | null | undefined): string {
-  if (!date) return '—';
-  return new Date(date).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-}
 
 function formatDateTimeLocal(date: string): string {
   return formatDateTime(date);

@@ -1,6 +1,6 @@
 'use client';
 
-import { cn, formatDateInput, parseDateInput } from '@/lib/utils';
+import { cn, formatDate, formatDateInput, parseDateInput } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChevronLeft, ChevronRight, Filter } from 'lucide-react';
@@ -22,12 +22,7 @@ export function CalendarFilters({
     onDateChange(next);
   }
 
-  const dateLabel = selectedDate.toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  const dateLabel = formatDate(selectedDate);
 
   return (
     <aside className={cn('flex flex-col rounded-lg border bg-white', className)}>

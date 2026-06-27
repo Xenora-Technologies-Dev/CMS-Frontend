@@ -12,6 +12,7 @@ import type { Booking, Doctor, PublicHoliday, Room } from '@/lib/types';
 import {
   cn,
   endOfDay,
+  formatDate,
   formatDateInput,
   getDoctorColor,
   getDoctorName,
@@ -34,6 +35,7 @@ import { ChevronLeft, ChevronRight, Plus, RefreshCw } from 'lucide-react';
 import { useDebouncedCallback } from '@/hooks/use-debounced-callback';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/components/providers/toast-provider';
+import { useBookingWhatsApp } from '@/components/whatsapp/booking-whatsapp-provider';
 import { useSocketEvent } from '@/components/providers/socket-provider';
 import { useClinicOptional } from '@/components/providers/clinic-provider';
 import { formatClinicLocation, getClinicDisplayName } from '@/lib/clinic-api';
@@ -51,6 +53,7 @@ export function ConsultationBookingCalendar({
   hideTitle,
 }: ConsultationBookingCalendarProps = {}) {
   const { showBookingAction } = useToast();
+  const { notifyAfterBookingAction } = useBookingWhatsApp();
   const clinicContext = useClinicOptional();
   const clinic = clinicContext?.clinic;
   const clinicName = getClinicDisplayName(clinic);
@@ -64,6 +67,7 @@ export function ConsultationBookingCalendar({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasLoadedOnce = useRef(false);
+  const loadRequestIdRef = useRef(0);
 
   const [selectedDoctorIds, setSelectedDoctorIds] = useState<string[]>(
     lockedDoctorId ? [lockedDoctorId] : [],
@@ -99,6 +103,7 @@ export function ConsultationBookingCalendar({
 
   const loadData = useCallback(
     async (options?: { background?: boolean }) => {
+      const requestId = ++loadRequestIdRef.current;
       const isBackground = options?.background && hasLoadedOnce.current;
       if (isBackground) {
         setRefreshing(true);
@@ -106,6 +111,8 @@ export function ConsultationBookingCalendar({
         setInitialLoading(true);
       } else {
         setRefreshing(true);
+        setBookings([]);
+        setHolidays([]);
       }
       setError(null);
       try {
@@ -122,6 +129,7 @@ export function ConsultationBookingCalendar({
             dateTo: endOfDay(selectedDate).toISOString(),
           }),
         ]);
+        if (requestId !== loadRequestIdRef.current) return;
         setBookings(dayBookings);
         setDoctors(
           lockedDoctorId
@@ -132,8 +140,10 @@ export function ConsultationBookingCalendar({
         setHolidays(holidayResult.data);
         hasLoadedOnce.current = true;
       } catch (err) {
+        if (requestId !== loadRequestIdRef.current) return;
         setError(err instanceof Error ? err.message : 'Failed to load calendar data');
       } finally {
+        if (requestId !== loadRequestIdRef.current) return;
         setInitialLoading(false);
         setRefreshing(false);
       }
@@ -178,12 +188,7 @@ export function ConsultationBookingCalendar({
     setSelectedDate(next);
   }
 
-  const sidebarDateLabel = selectedDate.toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  const sidebarDateLabel = formatDate(selectedDate);
 
   function handleSelectBooking(booking: Booking) {
     setSelectedBooking(booking);
@@ -206,10 +211,15 @@ export function ConsultationBookingCalendar({
     });
     setCancelOpen(false);
     setDetailOpen(false);
+    const whatsapp = await notifyAfterBookingAction({
+      booking: updated,
+      eventType: 'CANCELLED',
+    });
     showBookingAction({
       action: 'cancel',
       booking: updated,
       cancellationReason: reason || undefined,
+      whatsapp,
     });
     await loadData({ background: true });
   }
@@ -221,12 +231,7 @@ export function ConsultationBookingCalendar({
     await loadData({ background: true });
   }
 
-  const dateLabel = selectedDate.toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const dateLabel = formatDate(selectedDate);
 
   const resourcesReady = doctors.length > 0 && rooms.length > 0;
 
@@ -392,7 +397,7 @@ export function ConsultationBookingCalendar({
             </p>
           </div>
 
-          {initialLoading && bookings.length === 0 ? (
+          {(initialLoading || refreshing) && bookings.length === 0 ? (
             <div className="rounded-lg border p-12 text-center text-sm text-muted-foreground">
               Loading schedule…
             </div>

@@ -1,26 +1,13 @@
 import { formatClinicLocation } from '@/lib/clinic-api';
 import type { ReportMeta } from '@/lib/report-api';
-import { cn } from '@/lib/utils';
+import { cn, formatDate, formatDateTime } from '@/lib/utils';
 
 function formatPeriod(dateFrom: string, dateTo: string): string {
-  const fmt = (iso: string) =>
-    new Date(iso).toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-  return `${fmt(dateFrom)} – ${fmt(dateTo)}`;
+  return `${formatDate(dateFrom)} – ${formatDate(dateTo)}`;
 }
 
 function formatGeneratedAt(iso: string): string {
-  return new Date(iso).toLocaleString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
+  return formatDateTime(iso);
 }
 
 interface ReportLayoutProps {

@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/providers/toast-provider';
+import { useBookingWhatsApp } from '@/components/whatsapp/booking-whatsapp-provider';
 import { cancelBooking, completeBooking } from '@/lib/booking-api';
 import type { Booking, Doctor, Room, Therapist } from '@/lib/types';
 import {
@@ -209,6 +210,7 @@ export function DashboardBookingList({
   viewMoreHref,
 }: DashboardBookingListProps) {
   const { showBookingAction } = useToast();
+  const { notifyAfterBookingAction } = useBookingWhatsApp();
   const [modalOpen, setModalOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -454,10 +456,15 @@ export function DashboardBookingList({
             cancellationReason: reason || undefined,
           });
           setCancelOpen(false);
+          const whatsapp = await notifyAfterBookingAction({
+            booking: updated,
+            eventType: 'CANCELLED',
+          });
           showBookingAction({
             action: 'cancel',
             booking: updated,
             cancellationReason: reason,
+            whatsapp,
           });
           onActionComplete?.();
         }}
