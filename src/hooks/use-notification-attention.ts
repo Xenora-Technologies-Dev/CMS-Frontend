@@ -3,9 +3,9 @@
 import { useEffect, useRef } from 'react';
 import type { Notification } from '@/lib/notification-api';
 
-import { APP_NAME, APP_VERSION } from '@/lib/version';
+import { APP_NAME } from '@/lib/version';
 
-const BASE_TITLE = `${APP_NAME} v${APP_VERSION}`;
+const BASE_TITLE = APP_NAME;
 
 function formatTitle(unreadCount: number): string {
   if (unreadCount <= 0) return BASE_TITLE;

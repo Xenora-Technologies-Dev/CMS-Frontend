@@ -1,0 +1,5 @@
+Contact: mailto:security@cliniqflow.com
+Expires: 2027-06-28T23:59:59.000Z
+Preferred-Languages: en
+Canonical: https://cliniqflow.netlify.app/.well-known/security.txt
+Policy: https://cliniqflow.netlify.app/security-policy

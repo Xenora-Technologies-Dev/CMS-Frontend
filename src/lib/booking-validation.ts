@@ -750,14 +750,6 @@ export function validateBookingSlot(
   const end = computeEndTimeFromSlot(input.date, input.startTime, input.durationMinutes);
   const now = new Date();
 
-  if (timeToMinutes(input.startTime) % 15 !== 0) {
-    issues.push({
-      type: 'error',
-      code: 'slot_alignment',
-      message: 'Start time must align to 15-minute intervals',
-    });
-  }
-
   if (start < now) {
     issues.push({ type: 'error', code: 'past', message: 'Cannot schedule bookings in the past' });
   }

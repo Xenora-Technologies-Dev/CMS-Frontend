@@ -1,9 +1,40 @@
 [build]
+
   command = "npm run build"
+
   publish = ".next"
 
+
+
 [[plugins]]
+
   package = "@netlify/plugin-nextjs"
 
+
+
+# Security headers (OWASP / passive audit remediation)
+
+[[headers]]
+
+  for = "/*"
+
+  [headers.values]
+
+    X-Frame-Options = "DENY"
+
+    X-Content-Type-Options = "nosniff"
+
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
+
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.onrender.com wss://*.onrender.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self';"
+
+
+
 # Set NEXT_PUBLIC_API_URL in Netlify UI to your Render backend URL, e.g.:
+
 # https://your-service.onrender.com/api/v1
+
