@@ -43,11 +43,13 @@ interface NotificationsContextValue {
   notifications: Notification[];
   unreadTotal: number;
   hasNewAlert: boolean;
+  badgeVisible: boolean;
   loading: boolean;
   refresh: (options?: { background?: boolean }) => Promise<void>;
   markRead: (id: string) => Promise<void>;
   markAllRead: () => Promise<void>;
   clearNewAlert: () => void;
+  dismissBadge: () => void;
   onRealtimeNotification: (handler: (notification: Notification) => void) => () => void;
 }
 
@@ -59,9 +61,11 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadTotal, setUnreadTotal] = useState(0);
   const [hasNewAlert, setHasNewAlert] = useState(false);
+  const [badgeVisible, setBadgeVisible] = useState(true);
   const [loading, setLoading] = useState(false);
 
   const hasLoadedOnceRef = useRef(false);
+  const prevUserIdRef = useRef<string | null>(null);
   const realtimeHandlersRef = useRef(new Set<(notification: Notification) => void>());
 
   const refresh = useCallback(async (options?: { background?: boolean }) => {
@@ -69,6 +73,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       setNotifications([]);
       setUnreadTotal(0);
       setHasNewAlert(false);
+      setBadgeVisible(true);
       return;
     }
 
@@ -96,6 +101,14 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   useEffect(() => {
+    const userId = user?.id ?? null;
+    if (userId && userId !== prevUserIdRef.current) {
+      setBadgeVisible(true);
+    }
+    prevUserIdRef.current = userId;
+  }, [user?.id]);
+
+  useEffect(() => {
     if (connected && hasLoadedOnceRef.current) {
       void refresh({ background: true });
     }
@@ -113,6 +126,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     if (!notification.readAt) {
       setUnreadTotal((count) => count + 1);
       setHasNewAlert(true);
+      setBadgeVisible(true);
     }
 
     for (const handler of realtimeHandlersRef.current) {
@@ -141,6 +155,11 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     setHasNewAlert(false);
   }, []);
 
+  const dismissBadge = useCallback(() => {
+    setBadgeVisible(false);
+    setHasNewAlert(false);
+  }, []);
+
   const onRealtimeNotification = useCallback((handler: (notification: Notification) => void) => {
     realtimeHandlersRef.current.add(handler);
     return () => {
@@ -153,22 +172,26 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       notifications,
       unreadTotal,
       hasNewAlert,
+      badgeVisible,
       loading,
       refresh,
       markRead,
       markAllRead,
       clearNewAlert,
+      dismissBadge,
       onRealtimeNotification,
     }),
     [
       notifications,
       unreadTotal,
       hasNewAlert,
+      badgeVisible,
       loading,
       refresh,
       markRead,
       markAllRead,
       clearNewAlert,
+      dismissBadge,
       onRealtimeNotification,
     ],
   );

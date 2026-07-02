@@ -127,8 +127,8 @@ export function AdminDashboard() {
         onActionComplete={() => void loadDashboard({ background: true })}
       />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <div className="grid gap-6 lg:grid-cols-5 xl:grid-cols-2">
+        <div className="min-w-0 space-y-6 lg:col-span-3 xl:col-span-1">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold">Today&apos;s Appointments</CardTitle>
@@ -157,7 +157,7 @@ export function AdminDashboard() {
           </Card>
         </div>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6 lg:col-span-2 xl:col-span-1">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold">Upcoming Bookings</CardTitle>
@@ -173,6 +173,7 @@ export function AdminDashboard() {
                     consultationBookings={upcomingByType.consultation}
                     showPostponeCancel
                     hideHeader
+                    compact
                     therapists={therapists}
                     doctors={doctors}
                     rooms={rooms}
@@ -195,6 +196,7 @@ export function AdminDashboard() {
                   consultationBookings={pendingByType.consultation}
                   showPendingActions
                   hideHeader
+                  compact
                   therapists={therapists}
                   doctors={doctors}
                   rooms={rooms}

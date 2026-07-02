@@ -38,6 +38,8 @@ interface DashboardBookingListProps {
   showPendingActions?: boolean;
   showPostponeCancel?: boolean;
   hideHeader?: boolean;
+  /** Stack rows vertically and wrap metadata — for narrow dashboard columns */
+  compact?: boolean;
   therapists: Therapist[];
   doctors?: Doctor[];
   rooms: Room[];
@@ -49,6 +51,7 @@ interface DashboardBookingListProps {
 function BookingRow({
   booking,
   showPendingActions,
+  compact,
   onComplete,
   onDismiss,
   onClick,
@@ -57,6 +60,7 @@ function BookingRow({
 }: {
   booking: Booking;
   showPendingActions?: boolean;
+  compact?: boolean;
   onComplete?: (booking: Booking) => void;
   onDismiss?: (booking: Booking) => void;
   onClick?: (booking: Booking) => void;
@@ -66,7 +70,11 @@ function BookingRow({
   const isCompleting = completingBookingId === booking.id;
   return (
     <div
-      className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+      className={
+        compact
+          ? 'flex flex-col gap-2 rounded-lg border p-3'
+          : 'flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between'
+      }
       style={{
         borderLeftWidth: 4,
         borderLeftColor: getTherapistColor(booking.therapist?.colorCode),
@@ -77,8 +85,10 @@ function BookingRow({
         onClick={() => onClick?.(booking)}
         className="min-w-0 flex-1 text-left transition-opacity hover:opacity-80"
       >
-        <p className="truncate font-medium text-slate-900">{getPatientName(booking.patient)}</p>
-        <p className="truncate text-sm text-muted-foreground">
+        <p className={compact ? 'font-medium text-slate-900' : 'truncate font-medium text-slate-900'}>
+          {getPatientName(booking.patient)}
+        </p>
+        <p className={compact ? 'text-sm text-muted-foreground' : 'truncate text-sm text-muted-foreground'}>
           {booking.bookingType === 'CONSULTATION'
             ? 'Consultation'
             : (booking.therapy?.name ?? 'Appointment')}
@@ -91,7 +101,7 @@ function BookingRow({
         </p>
         <p className="text-xs text-muted-foreground">{booking.room.name}</p>
       </button>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className={compact ? 'flex flex-wrap items-center gap-2' : 'flex shrink-0 items-center gap-2'}>
         <span className="text-sm font-medium tabular-nums">
           {formatTime(booking.startTime)} – {formatTime(booking.endTime)}
         </span>
@@ -146,6 +156,7 @@ function TypeSection({
   label,
   bookings,
   showPendingActions,
+  compact,
   onComplete,
   onDismiss,
   onClick,
@@ -155,6 +166,7 @@ function TypeSection({
   label: string;
   bookings: Booking[];
   showPendingActions?: boolean;
+  compact?: boolean;
   onComplete?: (booking: Booking) => void;
   onDismiss?: (booking: Booking) => void;
   onClick?: (booking: Booking) => void;
@@ -183,6 +195,7 @@ function TypeSection({
             key={booking.id}
             booking={booking}
             showPendingActions={showPendingActions}
+            compact={compact}
             onComplete={onComplete}
             onDismiss={onDismiss}
             onClick={onClick}
@@ -202,6 +215,7 @@ export function DashboardBookingList({
   showPendingActions,
   showPostponeCancel,
   hideHeader,
+  compact,
   therapists,
   doctors = [],
   rooms,
@@ -315,6 +329,7 @@ export function DashboardBookingList({
           label="Therapy Booking"
           bookings={previewTherapy}
           showPendingActions={showPendingActions}
+          compact={compact}
           onComplete={handleComplete}
           onDismiss={openDismissDialog}
           onClick={openDetail}
@@ -325,6 +340,7 @@ export function DashboardBookingList({
           label="Consultation Booking"
           bookings={previewConsultation}
           showPendingActions={showPendingActions}
+          compact={compact}
           onComplete={handleComplete}
           onDismiss={openDismissDialog}
           onClick={openDetail}

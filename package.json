@@ -1,9 +1,10 @@
 {
   "name": "clinic-management-frontend",
-  "version": "1.75.0",
+  "version": "1.80.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node ./scripts/ensure-dev-ready.mjs && node --max-old-space-size=4096 ./node_modules/next/dist/bin/next dev",
+    "dev:clean": "node ./scripts/ensure-dev-ready.mjs --clean && node --max-old-space-size=4096 ./node_modules/next/dist/bin/next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

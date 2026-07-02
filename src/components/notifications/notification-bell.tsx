@@ -25,9 +25,18 @@ interface NotificationBellProps {
 }
 
 export function NotificationBell({ notificationsHref }: NotificationBellProps) {
-  const { notifications, unreadTotal, hasNewAlert, markRead, markAllRead, clearNewAlert } =
-    useNotifications();
+  const {
+    notifications,
+    unreadTotal,
+    hasNewAlert,
+    badgeVisible,
+    markRead,
+    markAllRead,
+    dismissBadge,
+  } = useNotifications();
   const [open, setOpen] = useState(false);
+
+  const showBadge = badgeVisible && unreadTotal > 0;
 
   useNotificationAttention(unreadTotal, hasNewAlert);
 
@@ -36,7 +45,7 @@ export function NotificationBell({ notificationsHref }: NotificationBellProps) {
     if (next) {
       requestNotificationPermission();
       primeNotificationSound();
-      clearNewAlert();
+      dismissBadge();
     }
   }
 
@@ -49,14 +58,17 @@ export function NotificationBell({ notificationsHref }: NotificationBellProps) {
           className={cn(
             'relative',
             hasNewAlert &&
-              unreadTotal > 0 &&
+              showBadge &&
               'animate-pulse ring-2 ring-primary ring-offset-2 ring-offset-background',
           )}
-          aria-label={unreadTotal > 0 ? `Notifications, ${unreadTotal} unread` : 'Notifications'}
-          onClick={primeNotificationSound}
+          aria-label={showBadge ? `Notifications, ${unreadTotal} unread` : 'Notifications'}
+          onClick={() => {
+            primeNotificationSound();
+            dismissBadge();
+          }}
         >
-          <Bell className={cn('h-5 w-5', hasNewAlert && unreadTotal > 0 && 'text-primary')} />
-          {unreadTotal > 0 && (
+          <Bell className={cn('h-5 w-5', hasNewAlert && showBadge && 'text-primary')} />
+          {showBadge && (
             <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground shadow-sm">
               {unreadTotal > 99 ? '99+' : unreadTotal}
             </span>
@@ -113,7 +125,7 @@ export function NotificationBell({ notificationsHref }: NotificationBellProps) {
           <Link
             href={notificationsHref}
             className="w-full cursor-pointer justify-center text-center"
-            onClick={() => clearNewAlert()}
+            onClick={() => dismissBadge()}
           >
             View all notifications
           </Link>
