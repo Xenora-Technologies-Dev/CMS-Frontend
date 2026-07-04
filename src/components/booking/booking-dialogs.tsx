@@ -411,27 +411,46 @@ export function RescheduleBookingDialog({
 interface CancelBookingDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (reason: string) => Promise<void>;
+  isCompleted?: boolean;
+  onSubmit: (input: { reason: string; cancelPassword?: string }) => Promise<void>;
 }
 
-export function CancelBookingDialog({ open, onOpenChange, onSubmit }: CancelBookingDialogProps) {
+export function CancelBookingDialog({
+  open,
+  onOpenChange,
+  isCompleted = false,
+  onSubmit,
+}: CancelBookingDialogProps) {
   const [reason, setReason] = useState('');
+  const [cancelPassword, setCancelPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (open) {
       setReason('');
+      setCancelPassword('');
       setError(null);
     }
   }, [open]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (isCompleted && !reason.trim()) {
+      setError('Cancellation reason is required');
+      return;
+    }
+    if (isCompleted && !cancelPassword.trim()) {
+      setError('Password is required to cancel a completed appointment');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      await onSubmit(reason.trim());
+      await onSubmit({
+        reason: reason.trim(),
+        cancelPassword: isCompleted ? cancelPassword : undefined,
+      });
       onOpenChange(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to cancel booking');
@@ -444,18 +463,37 @@ export function CancelBookingDialog({ open, onOpenChange, onSubmit }: CancelBook
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Cancel Appointment</DialogTitle>
+          <DialogTitle>
+            {isCompleted ? 'Cancel Completed Appointment' : 'Cancel Appointment'}
+          </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="reason">Reason (optional)</Label>
+            <Label htmlFor="reason">
+              Reason{isCompleted ? '' : ' (optional)'}
+            </Label>
             <Textarea
               id="reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Enter reason for cancellation"
+              required={isCompleted}
             />
           </div>
+          {isCompleted && (
+            <div className="space-y-2">
+              <Label htmlFor="cancelPassword">Password</Label>
+              <Input
+                id="cancelPassword"
+                type="password"
+                value={cancelPassword}
+                onChange={(e) => setCancelPassword(e.target.value)}
+                placeholder="Enter password to confirm"
+                required
+                autoComplete="off"
+              />
+            </div>
+          )}
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -773,11 +811,19 @@ export function BookingDetailDialog({
             {!isStaffView &&
               isConsultation &&
               onCancel &&
-              ['SCHEDULED', 'CONFIRMED', 'PENDING_CONFIRMATION'].includes(booking.status) && (
+              ['SCHEDULED', 'CONFIRMED', 'PENDING_CONFIRMATION', 'COMPLETED'].includes(
+                booking.status,
+              ) &&
+              !canModify && (
                 <Button variant="destructive" className="w-full" onClick={onCancel}>
                   Cancel
                 </Button>
               )}
+            {!isStaffView && booking.status === 'COMPLETED' && onCancel && !isConsultation && (
+              <Button variant="destructive" className="w-full" onClick={onCancel}>
+                Cancel
+              </Button>
+            )}
             {!isStaffView && booking.status === 'CANCELLED' && onRestore && (
               <Button variant="outline" className="w-full" onClick={onRestore}>
                 <RotateCcw className="mr-2 h-4 w-4" />

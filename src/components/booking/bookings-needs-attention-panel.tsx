@@ -7,7 +7,7 @@ import { BookingRescheduleModal } from '@/components/booking/booking-reschedule-
 import { CancelBookingDialog } from '@/components/booking/booking-dialogs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { cancelBooking, fetchBooking } from '@/lib/booking-api';
+import { buildCancelBookingPayload, cancelBooking, fetchBooking } from '@/lib/booking-api';
 import type { BookingNeedingAttention } from '@/lib/leave-api';
 import { fetchBookingsNeedingAttention } from '@/lib/leave-api';
 import { listRooms } from '@/lib/room-api';
@@ -198,11 +198,12 @@ export function BookingsNeedsAttentionPanel({
           <CancelBookingDialog
             open={cancelOpen}
             onOpenChange={setCancelOpen}
-            onSubmit={async (reason) => {
+            onSubmit={async (input) => {
               if (!cancelBookingId) return;
-              const { booking: updated } = await cancelBooking(cancelBookingId, {
-                cancellationReason: reason,
-              });
+              const { booking: updated } = await cancelBooking(
+                cancelBookingId,
+                buildCancelBookingPayload(input),
+              );
               setCancelBookingId(null);
               const whatsapp = await notifyAfterBookingAction({
                 booking: updated,
@@ -211,7 +212,7 @@ export function BookingsNeedsAttentionPanel({
               showBookingAction({
                 action: 'cancel',
                 booking: updated,
-                cancellationReason: reason,
+                cancellationReason: input.reason,
                 whatsapp,
               });
               handleActionDone();

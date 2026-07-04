@@ -3,11 +3,10 @@
 import {
   CALENDAR_DAY_END_HOUR,
   CALENDAR_DAY_START_HOUR,
-  CALENDAR_MIN_ROOM_COLUMN_WIDTH,
   CALENDAR_SLOT_HEIGHT,
   CALENDAR_SLOT_MINUTES,
 } from '@/components/booking/booking-constants';
-import { BookingCard } from '@/components/booking/booking-card';
+import { BookingCard, getBookingPosition } from '@/components/booking/booking-card';
 import type { Booking, PublicHoliday, Room } from '@/lib/types';
 import {
   cn,
@@ -17,9 +16,8 @@ import {
   getBookingStaffColor,
   hexToRgba,
 } from '@/lib/utils';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Plus } from 'lucide-react';
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 
 interface BookingTimelineProps {
   rooms: Room[];
@@ -54,21 +52,6 @@ function getSlotFillColor(
   );
   if (!covering) return undefined;
   return hexToRgba(getBookingStaffColor(covering), 0.18);
-}
-
-function getBookingPosition(booking: Booking) {
-  const start = new Date(booking.startTime);
-  const end = new Date(booking.endTime);
-  const startMinutes = start.getHours() * 60 + start.getMinutes();
-  const endMinutes = end.getHours() * 60 + end.getMinutes();
-  const dayStartMinutes = CALENDAR_DAY_START_HOUR * 60;
-  const top =
-    ((startMinutes - dayStartMinutes) / CALENDAR_SLOT_MINUTES) * CALENDAR_SLOT_HEIGHT;
-  const height = Math.max(
-    ((endMinutes - startMinutes) / CALENDAR_SLOT_MINUTES) * CALENDAR_SLOT_HEIGHT,
-    CALENDAR_SLOT_HEIGHT,
-  );
-  return { top, height };
 }
 
 export function BookingTimeline({
@@ -112,7 +95,7 @@ export function BookingTimeline({
     const dayStart = CALENDAR_DAY_START_HOUR * 60;
     const dayEnd = CALENDAR_DAY_END_HOUR * 60;
     if (minutes < dayStart || minutes > dayEnd) return null;
-    return ((minutes - dayStart) / CALENDAR_SLOT_MINUTES) * CALENDAR_SLOT_HEIGHT;
+    return Math.round(((minutes - dayStart) / CALENDAR_SLOT_MINUTES) * CALENDAR_SLOT_HEIGHT);
   }, [selectedDate]);
 
   const isToday =
@@ -130,59 +113,82 @@ export function BookingTimeline({
     });
   }, [holidays, selectedDate]);
 
+  const headerScrollRef = useRef<HTMLDivElement>(null);
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
+
+  const syncHeaderScroll = useCallback(() => {
+    const body = bodyScrollRef.current;
+    const header = headerScrollRef.current;
+    if (body && header && header.scrollLeft !== body.scrollLeft) {
+      header.scrollLeft = body.scrollLeft;
+    }
+  }, []);
+
+  const roomColumnClass =
+    'relative shrink-0 border-r last:border-r-0 min-w-[clamp(130px,36vw,200px)] flex-[1_0_clamp(130px,36vw,200px)]';
+
   return (
-    <div className="rounded-lg border bg-white shadow-sm">
+    <div className="flex max-h-[min(75vh,calc(100vh-14rem))] flex-col overflow-hidden rounded-lg border bg-white shadow-sm">
       {dayHolidays.length > 0 && (
-        <div className="border-b bg-amber-50 px-4 py-2 text-xs text-amber-900">
+        <div className="shrink-0 border-b bg-amber-50 px-4 py-2 text-xs text-amber-900">
           <span className="font-semibold">Public holiday{dayHolidays.length > 1 ? 's' : ''}: </span>
           {dayHolidays.map((h) => h.name).join(', ')}
         </div>
       )}
-      <div>
-        <ScrollArea className="w-full">
-          <div className="inline-flex min-w-full">
-            <div className="sticky left-0 z-30 w-14 shrink-0 border-r bg-slate-50">
-              <div className="sticky top-0 z-20 flex h-12 items-center border-b bg-slate-50 px-1">
-                <span className="text-[10px] font-medium uppercase text-muted-foreground">
-                  Time
-                </span>
-              </div>
-              <div className="relative" style={{ height: timelineHeight }}>
-                {timeSlots.map((slot, index) => (
-                  <div
-                    key={slot}
-                    className={cn(
-                      'absolute left-0 right-0 border-b border-slate-100',
-                      index % 4 === 0 && 'border-slate-200',
-                    )}
-                    style={{ top: index * CALENDAR_SLOT_HEIGHT, height: CALENDAR_SLOT_HEIGHT }}
-                  >
-                    {index % 4 === 0 && (
-                      <span className="absolute -top-2 left-0.5 bg-slate-50 px-0.5 text-[10px] font-medium text-muted-foreground">
-                        {formatTimeInputValue(slot)}
-                      </span>
-                    )}
-                  </div>
-                ))}
+
+      <div
+        ref={headerScrollRef}
+        className="shrink-0 overflow-x-auto border-b bg-slate-50/95 shadow-sm backdrop-blur-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <div className="inline-flex min-w-full">
+          <div className="flex h-12 w-14 shrink-0 items-center border-r px-1">
+            <span className="text-[10px] font-semibold uppercase text-slate-700">Time</span>
+          </div>
+          {rooms.map((room) => (
+            <div key={room.id} className={roomColumnClass}>
+              <div className="flex h-12 flex-col justify-center px-2">
+                <p className="truncate text-sm font-bold text-slate-900">{room.name}</p>
+                {room.code && (
+                  <p className="truncate text-[10px] font-medium text-slate-600">{room.code}</p>
+                )}
               </div>
             </div>
+          ))}
+        </div>
+      </div>
+
+      <div
+        ref={bodyScrollRef}
+        className="min-h-0 flex-1 overflow-auto"
+        onScroll={syncHeaderScroll}
+      >
+        <div className="inline-flex min-w-full">
+          <div className="sticky left-0 z-40 w-14 shrink-0 border-r bg-slate-50/95 backdrop-blur-md">
+            <div className="relative" style={{ height: timelineHeight }}>
+              {timeSlots.map((slot, index) => (
+                <div
+                  key={slot}
+                  className={cn(
+                    'absolute left-0 right-0',
+                    index % 4 === 0 && 'border-t border-slate-200',
+                  )}
+                  style={{ top: index * CALENDAR_SLOT_HEIGHT, height: CALENDAR_SLOT_HEIGHT }}
+                >
+                  {index % 4 === 0 && (
+                    <span className="absolute left-0.5 top-0 z-10 -translate-y-1/2 bg-slate-50/95 px-0.5 text-[10px] font-medium leading-none text-muted-foreground">
+                      {formatTimeInputValue(slot)}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
 
             {rooms.map((room) => (
               <div
                 key={room.id}
-                className="relative shrink-0 border-r last:border-r-0 sm:min-w-[140px]"
-                style={{
-                  minWidth: 120,
-                  flex: '1 0 120px',
-                }}
+                className={roomColumnClass}
               >
-                <div className="sticky top-0 z-20 flex h-12 flex-col justify-center border-b bg-slate-50 px-2">
-                  <p className="truncate text-sm font-semibold">{room.name}</p>
-                  {room.code && (
-                    <p className="truncate text-[10px] text-muted-foreground">{room.code}</p>
-                  )}
-                </div>
-
                 <div className="relative bg-slate-50/20" style={{ height: timelineHeight }}>
                   {timeSlots.map((slot, index) => {
                     const fillColor = getSlotFillColor(room.id, slot, bookings, selectedDate);
@@ -191,9 +197,9 @@ export function BookingTimeline({
                       key={`${room.id}-${slot}`}
                       type="button"
                       className={cn(
-                        'absolute left-0 right-0 border-b border-slate-100 transition-colors',
+                        'absolute left-0 right-0 transition-colors',
                         'hover:bg-primary/5 focus-visible:bg-primary/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary',
-                        index % 4 === 0 && 'border-slate-200',
+                        index % 4 === 0 && 'border-t border-slate-200',
                         onEmptySlotClick && 'group cursor-pointer',
                       )}
                       style={{
@@ -230,11 +236,11 @@ export function BookingTimeline({
                         className="pointer-events-none absolute left-0 right-0 z-[5]"
                         style={{ top, height }}
                       >
-                        <div className="pointer-events-auto h-full">
+                        <div className="pointer-events-auto relative h-full">
                           <BookingCard
                             booking={booking}
                             onSelect={onSelectBooking}
-                            compact={height < CALENDAR_SLOT_HEIGHT * 2}
+                            eventHeight={height}
                             showActionsMenu={showBookingActions}
                             onEdit={onEditBooking}
                             onPostpone={onPostponeBooking}
@@ -247,11 +253,8 @@ export function BookingTimeline({
                 </div>
               </div>
             ))}
-          </div>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
+        </div>
       </div>
-
     </div>
   );
 }

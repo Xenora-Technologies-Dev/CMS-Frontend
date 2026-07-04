@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { cancelBooking, fetchBooking } from '@/lib/booking-api';
+import { buildCancelBookingPayload, cancelBooking, fetchBooking } from '@/lib/booking-api';
 import { listRooms } from '@/lib/room-api';
 import { listTherapists } from '@/lib/therapist-api';
 import type { AffectedBooking, LeaveRequest } from '@/lib/leave-api';
@@ -149,9 +149,9 @@ export function LeaveConflictDialog({
       <CancelBookingDialog
         open={cancelOpen}
         onOpenChange={setCancelOpen}
-        onSubmit={async (reason) => {
+        onSubmit={async (input) => {
           if (!cancelBookingId) return;
-          await cancelBooking(cancelBookingId, { cancellationReason: reason });
+          await cancelBooking(cancelBookingId, buildCancelBookingPayload(input));
           setCancelBookingId(null);
         }}
       />

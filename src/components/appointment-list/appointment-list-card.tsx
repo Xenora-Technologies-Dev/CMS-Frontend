@@ -11,8 +11,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { Booking } from '@/lib/types';
 import {
-  canEditBooking,
+  canCancelBooking,
   canCompleteBooking,
+  canEditBooking,
   canRestoreBooking,
   formatDateTime,
   formatUserName,
@@ -59,6 +60,7 @@ export function AppointmentListCard({
 }: AppointmentListCardProps) {
   const insuranceName = booking.patientInsurance?.insuranceProvider?.name;
   const editable = canEditBooking(booking);
+  const cancellable = canCancelBooking(booking);
   const completable = canCompleteBooking(booking);
   const restorable = canRestoreBooking(booking);
   const appointmentDate = formatDate(booking.startTime);
@@ -122,7 +124,7 @@ export function AppointmentListCard({
                 Mark Completed
               </DropdownMenuItem>
             )}
-            {editable && onCancel && (
+            {(editable || cancellable) && onCancel && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem

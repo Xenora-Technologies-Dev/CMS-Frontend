@@ -16,6 +16,7 @@ import { BookingFormModal } from '@/components/booking/booking-form-modal';
 import { BookingRescheduleModal } from '@/components/booking/booking-reschedule-modal';
 import { PaginationControls } from '@/components/shared/pagination-controls';
 import {
+  buildCancelBookingPayload,
   cancelBooking,
   completeBooking,
   listBookings,
@@ -170,12 +171,13 @@ export function AppointmentList() {
     setCancelOpen(true);
   }
 
-  async function handleCancelSubmit(reason: string) {
+  async function handleCancelSubmit(input: { reason: string; cancelPassword?: string }) {
     if (!selectedBooking) return;
     const previous = selectedBooking;
-    const { booking: updated } = await cancelBooking(previous.id, {
-      cancellationReason: reason || undefined,
-    });
+    const { booking: updated } = await cancelBooking(
+      previous.id,
+      buildCancelBookingPayload(input),
+    );
     setCancelOpen(false);
     const whatsapp = await notifyAfterBookingAction({
       booking: updated,
@@ -184,7 +186,7 @@ export function AppointmentList() {
     showBookingAction({
       action: 'cancel',
       booking: updated,
-      cancellationReason: reason || undefined,
+      cancellationReason: input.reason || undefined,
       whatsapp,
     });
     await loadBookings({ background: true });
@@ -333,6 +335,7 @@ export function AppointmentList() {
       <CancelBookingDialog
         open={cancelOpen}
         onOpenChange={setCancelOpen}
+        isCompleted={selectedBooking?.status === 'COMPLETED'}
         onSubmit={handleCancelSubmit}
       />
     </div>

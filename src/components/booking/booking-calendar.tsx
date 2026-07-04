@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  buildCancelBookingPayload,
   cancelBooking,
   completeBooking,
   fetchBookingsForDate,
@@ -221,12 +222,13 @@ export function BookingCalendar({
     setCancelOpen(true);
   }
 
-  async function handleCancel(reason: string) {
+  async function handleCancel(input: { reason: string; cancelPassword?: string }) {
     if (!selectedBooking) return;
     const previous = selectedBooking;
-    const { booking: updated } = await cancelBooking(previous.id, {
-      cancellationReason: reason || undefined,
-    });
+    const { booking: updated } = await cancelBooking(
+      previous.id,
+      buildCancelBookingPayload(input),
+    );
     setCancelOpen(false);
     setDetailOpen(false);
     const whatsapp = await notifyAfterBookingAction({
@@ -236,7 +238,7 @@ export function BookingCalendar({
     showBookingAction({
       action: 'cancel',
       booking: updated,
-      cancellationReason: reason || undefined,
+      cancellationReason: input.reason || undefined,
       whatsapp,
     });
     await loadData({ background: true });
@@ -462,6 +464,7 @@ export function BookingCalendar({
       <CancelBookingDialog
         open={cancelOpen}
         onOpenChange={setCancelOpen}
+        isCompleted={selectedBooking?.status === 'COMPLETED'}
         onSubmit={handleCancel}
       />
     </div>

@@ -55,6 +55,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<R
     ...rest,
     headers: requestHeaders,
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials: 'omit',
   });
 
   if (response.status === 401) {

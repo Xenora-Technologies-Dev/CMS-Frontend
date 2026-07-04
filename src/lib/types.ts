@@ -447,4 +447,5 @@ export interface RescheduleBookingPayload {
 
 export interface CancelBookingPayload {
   cancellationReason?: string;
+  cancelPassword?: string;
 }

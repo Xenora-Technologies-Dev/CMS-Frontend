@@ -1,5 +1,6 @@
 import type { BookingStatus } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 const STATUS_VARIANT: Record<
   BookingStatus,
@@ -19,18 +20,34 @@ const STATUS_LABEL: Partial<Record<BookingStatus, string>> = {
   PENDING_CONFIRMATION: 'Pending Confirmation',
 };
 
-export function BookingStatusBadge({ status }: { status: BookingStatus }) {
-  const label = STATUS_LABEL[status] ?? status.replace(/_/g, ' ');
+const STATUS_LABEL_COMPACT: Partial<Record<BookingStatus, string>> = {
+  PENDING_CONFIRMATION: 'Pending',
+  IN_PROGRESS: 'In Progress',
+};
+
+interface BookingStatusBadgeProps {
+  status: BookingStatus;
+  compact?: boolean;
+}
+
+export function BookingStatusBadge({ status, compact = false }: BookingStatusBadgeProps) {
+  const label = compact
+    ? (STATUS_LABEL_COMPACT[status] ??
+      STATUS_LABEL[status] ??
+      status.replace(/_/g, ' '))
+    : (STATUS_LABEL[status] ?? status.replace(/_/g, ' '));
   const isPendingConfirmation = status === 'PENDING_CONFIRMATION';
 
   return (
     <Badge
       variant={STATUS_VARIANT[status]}
-      className={
-        isPendingConfirmation
-          ? 'shrink-0 border-orange-300 bg-orange-100 font-bold text-orange-800 ring-1 ring-orange-400/60'
-          : 'shrink-0'
-      }
+      className={cn(
+        compact &&
+          'max-w-full whitespace-normal px-1 py-0 text-[9px] font-semibold leading-tight sm:px-1.5 sm:text-[10px]',
+        !compact && 'shrink-0',
+        isPendingConfirmation &&
+          'border-orange-300 bg-orange-100 font-bold text-orange-800 ring-1 ring-orange-400/60',
+      )}
     >
       {label}
     </Badge>

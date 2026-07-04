@@ -194,6 +194,16 @@ export async function cancelBooking(
   });
 }
 
+export function buildCancelBookingPayload(input: {
+  reason: string;
+  cancelPassword?: string;
+}): CancelBookingPayload {
+  return {
+    cancellationReason: input.reason || undefined,
+    ...(input.cancelPassword ? { cancelPassword: input.cancelPassword } : {}),
+  };
+}
+
 export type BookingWhatsAppEventType = 'SCHEDULED' | 'CANCELLED' | 'RESCHEDULED';
 
 export interface BookingWhatsAppResult {

@@ -17,7 +17,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/providers/toast-provider';
 import { useBookingWhatsApp } from '@/components/whatsapp/booking-whatsapp-provider';
-import { cancelBooking, completeBooking } from '@/lib/booking-api';
+import { buildCancelBookingPayload, cancelBooking, completeBooking } from '@/lib/booking-api';
 import type { Booking, Doctor, Room, Therapist } from '@/lib/types';
 import {
   formatTime,
@@ -466,11 +466,13 @@ export function DashboardBookingList({
       <CancelBookingDialog
         open={cancelOpen}
         onOpenChange={setCancelOpen}
-        onSubmit={async (reason) => {
+        isCompleted={selectedBooking?.status === 'COMPLETED'}
+        onSubmit={async (input) => {
           if (!selectedBooking) return;
-          const { booking: updated } = await cancelBooking(selectedBooking.id, {
-            cancellationReason: reason || undefined,
-          });
+          const { booking: updated } = await cancelBooking(
+            selectedBooking.id,
+            buildCancelBookingPayload(input),
+          );
           setCancelOpen(false);
           const whatsapp = await notifyAfterBookingAction({
             booking: updated,
@@ -479,7 +481,7 @@ export function DashboardBookingList({
           showBookingAction({
             action: 'cancel',
             booking: updated,
-            cancellationReason: reason,
+            cancellationReason: input.reason,
             whatsapp,
           });
           onActionComplete?.();

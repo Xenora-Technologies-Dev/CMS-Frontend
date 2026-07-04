@@ -28,7 +28,7 @@ import { useToast } from '@/components/providers/toast-provider';
 import { useBookingWhatsApp } from '@/components/whatsapp/booking-whatsapp-provider';
 import { useBackgroundLoadState } from '@/hooks/use-background-load-state';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
-import { cancelBooking, completeBooking, listBookings } from '@/lib/booking-api';
+import { buildCancelBookingPayload, cancelBooking, completeBooking, listBookings } from '@/lib/booking-api';
 import { listDoctors } from '@/lib/doctor-api';
 import { listRooms } from '@/lib/room-api';
 import { listTherapists } from '@/lib/therapist-api';
@@ -515,11 +515,13 @@ export function PendingConfirmationList() {
       <CancelBookingDialog
         open={cancelOpen}
         onOpenChange={setCancelOpen}
-        onSubmit={async (reason) => {
+        isCompleted={selectedBooking?.status === 'COMPLETED'}
+        onSubmit={async (input) => {
           if (!selectedBooking) return;
-          const { booking: updated } = await cancelBooking(selectedBooking.id, {
-            cancellationReason: reason || undefined,
-          });
+          const { booking: updated } = await cancelBooking(
+            selectedBooking.id,
+            buildCancelBookingPayload(input),
+          );
           setCancelOpen(false);
           const whatsapp = await notifyAfterBookingAction({
             booking: updated,
@@ -528,7 +530,7 @@ export function PendingConfirmationList() {
           showBookingAction({
             action: 'cancel',
             booking: updated,
-            cancellationReason: reason,
+            cancellationReason: input.reason,
             whatsapp,
           });
           void loadBookings({ background: true });
