@@ -26,6 +26,14 @@ export function canEditBooking(booking: Booking): boolean {
   return ['SCHEDULED', 'CONFIRMED', 'PENDING_CONFIRMATION'].includes(booking.status);
 }
 
+export function isCompletedBookingEdit(booking: Booking): boolean {
+  return booking.status === 'COMPLETED';
+}
+
+export function canRequestBookingEdit(booking: Booking): boolean {
+  return canEditBooking(booking) || isCompletedBookingEdit(booking);
+}
+
 export function canCancelBooking(booking: Booking): boolean {
   return (
     canEditBooking(booking) ||

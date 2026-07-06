@@ -10,7 +10,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { Booking } from '@/lib/types';
-import { canCancelBooking, canEditBooking } from '@/lib/appointment-list-utils';
+import {
+  canCancelBooking,
+  canEditBooking,
+  isCompletedBookingEdit,
+} from '@/lib/appointment-list-utils';
 import {
   cn,
   formatTime,
@@ -23,15 +27,13 @@ import {
 import { Calendar, Eye, MoreVertical, Pencil, XCircle } from 'lucide-react';
 
 import {
-  CALENDAR_DAY_END_HOUR,
-  CALENDAR_DAY_START_HOUR,
+  CALENDAR_DEFAULT_DAY_START_HOUR,
   CALENDAR_SLOT_HEIGHT,
   CALENDAR_SLOT_MINUTES,
 } from '@/components/booking/booking-constants';
 
 export const SLOT_HEIGHT = CALENDAR_SLOT_HEIGHT;
-export const DAY_START_HOUR = CALENDAR_DAY_START_HOUR;
-export const DAY_END_HOUR = CALENDAR_DAY_END_HOUR;
+export const DAY_START_HOUR = CALENDAR_DEFAULT_DAY_START_HOUR;
 export const SLOT_MINUTES = CALENDAR_SLOT_MINUTES;
 
 /** Progressive detail levels — taller blocks show more (Teams-style). */
@@ -45,12 +47,15 @@ function getEventDensity(eventHeightPx: number): EventDensity {
   return 'lg';
 }
 
-export function getBookingPosition(booking: Booking) {
+export function getBookingPosition(
+  booking: Booking,
+  dayStartHour: number = CALENDAR_DEFAULT_DAY_START_HOUR,
+) {
   const start = new Date(booking.startTime);
   const end = new Date(booking.endTime);
   const startMinutes = start.getHours() * 60 + start.getMinutes();
   const endMinutes = end.getHours() * 60 + end.getMinutes();
-  const dayStartMinutes = DAY_START_HOUR * 60;
+  const dayStartMinutes = dayStartHour * 60;
   const top = Math.round(((startMinutes - dayStartMinutes) / SLOT_MINUTES) * SLOT_HEIGHT);
   const height = Math.round(
     Math.max(((endMinutes - startMinutes) / SLOT_MINUTES) * SLOT_HEIGHT, SLOT_HEIGHT),
@@ -83,7 +88,8 @@ export function BookingCard({
   const color = getBookingStaffColor(booking);
   const isConsultation = booking.bookingType === 'CONSULTATION';
   const isInactive = ['CANCELLED', 'RESCHEDULED', 'COMPLETED', 'NO_SHOW'].includes(booking.status);
-  const editable = showActionsMenu && canEditBooking(booking);
+  const editable =
+    showActionsMenu && (canEditBooking(booking) || isCompletedBookingEdit(booking));
   const cancellable = showActionsMenu && canCancelBooking(booking) && onCancel;
   const showActions = editable || cancellable;
   const staffName = isConsultation

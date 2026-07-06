@@ -11,7 +11,10 @@ import { BookingsNeedsAttentionPanel } from '@/components/booking/bookings-needs
 import {
   CancelBookingDialog,
   BookingDetailDialog,
+  CompletedBookingPasswordDialog,
 } from '@/components/booking/booking-dialogs';
+import { COMPLETED_BOOKING_PASSWORD } from '@/components/booking/booking-constants';
+import { canRequestBookingEdit, isCompletedBookingEdit } from '@/lib/appointment-list-utils';
 import { BookingFormModal } from '@/components/booking/booking-form-modal';
 import { BookingRescheduleModal } from '@/components/booking/booking-reschedule-modal';
 import { PaginationControls } from '@/components/shared/pagination-controls';
@@ -60,6 +63,9 @@ export function AppointmentList() {
   const [formOpen, setFormOpen] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [editPasswordOpen, setEditPasswordOpen] = useState(false);
+  const [editPassword, setEditPassword] = useState<string | undefined>();
+  const [pendingEditBooking, setPendingEditBooking] = useState<Booking | null>(null);
   const [processingBookingId, setProcessingBookingId] = useState<string | null>(null);
 
   const debouncedPatientName = useDebouncedValue(filters.patientName);
@@ -156,9 +162,20 @@ export function AppointmentList() {
     setDetailOpen(true);
   }
 
-  function handleEdit(booking: Booking) {
+  function openEditForm(booking: Booking, password?: string) {
     setSelectedBooking(booking);
+    setEditPassword(password);
     setFormOpen(true);
+  }
+
+  function handleEdit(booking: Booking) {
+    if (!canRequestBookingEdit(booking)) return;
+    if (isCompletedBookingEdit(booking)) {
+      setPendingEditBooking(booking);
+      setEditPasswordOpen(true);
+      return;
+    }
+    openEditForm(booking);
   }
 
   function handlePostpone(booking: Booking) {
@@ -280,8 +297,9 @@ export function AppointmentList() {
         open={detailOpen}
         onOpenChange={setDetailOpen}
         onEdit={() => {
+          if (!selectedBooking) return;
           setDetailOpen(false);
-          setFormOpen(true);
+          handleEdit(selectedBooking);
         }}
         onReschedule={() => {
           setDetailOpen(false);
@@ -319,7 +337,11 @@ export function AppointmentList() {
         therapies={therapies}
         dayBookings={bookings}
         booking={selectedBooking}
-        onSuccess={() => void loadBookings({ background: true })}
+        editPassword={editPassword}
+        onSuccess={() => {
+          setEditPassword(undefined);
+          void loadBookings({ background: true });
+        }}
       />
 
       <BookingRescheduleModal
@@ -337,6 +359,22 @@ export function AppointmentList() {
         onOpenChange={setCancelOpen}
         isCompleted={selectedBooking?.status === 'COMPLETED'}
         onSubmit={handleCancelSubmit}
+      />
+
+      <CompletedBookingPasswordDialog
+        open={editPasswordOpen}
+        onOpenChange={(open) => {
+          setEditPasswordOpen(open);
+          if (!open) setPendingEditBooking(null);
+        }}
+        onSubmit={async (password) => {
+          if (password !== COMPLETED_BOOKING_PASSWORD) {
+            throw new Error('Invalid password');
+          }
+          if (!pendingEditBooking) return;
+          openEditForm(pendingEditBooking, password);
+          setPendingEditBooking(null);
+        }}
       />
     </div>
   );

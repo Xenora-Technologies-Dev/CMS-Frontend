@@ -14,6 +14,8 @@ import {
   canCancelBooking,
   canCompleteBooking,
   canEditBooking,
+  canRequestBookingEdit,
+} from '@/lib/appointment-list-utils';
   canRestoreBooking,
   formatDateTime,
   formatUserName,
@@ -59,7 +61,8 @@ export function AppointmentListCard({
   onComplete,
 }: AppointmentListCardProps) {
   const insuranceName = booking.patientInsurance?.insuranceProvider?.name;
-  const editable = canEditBooking(booking);
+  const editable = canRequestBookingEdit(booking);
+  const postponable = canEditBooking(booking);
   const cancellable = canCancelBooking(booking);
   const completable = canCompleteBooking(booking);
   const restorable = canRestoreBooking(booking);
@@ -112,7 +115,7 @@ export function AppointmentListCard({
                 Edit
               </DropdownMenuItem>
             )}
-            {editable && onPostpone && (
+            {postponable && onPostpone && (
               <DropdownMenuItem onClick={() => onPostpone(booking)}>
                 <Calendar className="mr-2 h-4 w-4" />
                 Postpone

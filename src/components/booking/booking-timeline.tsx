@@ -1,10 +1,10 @@
 'use client';
 
 import {
-  CALENDAR_DAY_END_HOUR,
-  CALENDAR_DAY_START_HOUR,
   CALENDAR_SLOT_HEIGHT,
   CALENDAR_SLOT_MINUTES,
+  CALENDAR_SLOTS_PER_HOUR,
+  computeCalendarDayRange,
 } from '@/components/booking/booking-constants';
 import { BookingCard, getBookingPosition } from '@/components/booking/booking-card';
 import type { Booking, PublicHoliday, Room } from '@/lib/types';
@@ -54,6 +54,11 @@ function getSlotFillColor(
   return hexToRgba(getBookingStaffColor(covering), 0.18);
 }
 
+function isHourBoundary(slot: string): boolean {
+  const minutes = Number(slot.split(':')[1]);
+  return minutes === 0;
+}
+
 export function BookingTimeline({
   rooms,
   bookings,
@@ -66,10 +71,14 @@ export function BookingTimeline({
   onPostponeBooking,
   onCancelBooking,
 }: BookingTimelineProps) {
-  const timeSlots = generateTimeSlots(
-    CALENDAR_DAY_START_HOUR,
-    CALENDAR_DAY_END_HOUR,
-    CALENDAR_SLOT_MINUTES,
+  const { startHour, endHour } = useMemo(
+    () => computeCalendarDayRange(bookings, selectedDate),
+    [bookings, selectedDate],
+  );
+
+  const timeSlots = useMemo(
+    () => generateTimeSlots(startHour, endHour, CALENDAR_SLOT_MINUTES),
+    [startHour, endHour],
   );
   const timelineHeight = timeSlots.length * CALENDAR_SLOT_HEIGHT;
 
@@ -92,14 +101,13 @@ export function BookingTimeline({
       return null;
     }
     const minutes = today.getHours() * 60 + today.getMinutes();
-    const dayStart = CALENDAR_DAY_START_HOUR * 60;
-    const dayEnd = CALENDAR_DAY_END_HOUR * 60;
+    const dayStart = startHour * 60;
+    const dayEnd = endHour * 60;
     if (minutes < dayStart || minutes > dayEnd) return null;
     return Math.round(((minutes - dayStart) / CALENDAR_SLOT_MINUTES) * CALENDAR_SLOT_HEIGHT);
-  }, [selectedDate]);
+  }, [selectedDate, startHour, endHour]);
 
-  const isToday =
-    new Date().toDateString() === selectedDate.toDateString();
+  const isToday = new Date().toDateString() === selectedDate.toDateString();
 
   const dayHolidays = useMemo(() => {
     const dayStart = new Date(selectedDate);
@@ -165,41 +173,47 @@ export function BookingTimeline({
         <div className="inline-flex min-w-full">
           <div className="sticky left-0 z-40 w-14 shrink-0 border-r bg-slate-50/95 backdrop-blur-md">
             <div className="relative" style={{ height: timelineHeight }}>
-              {timeSlots.map((slot, index) => (
-                <div
-                  key={slot}
-                  className={cn(
-                    'absolute left-0 right-0',
-                    index % 4 === 0 && 'border-t border-slate-200',
-                  )}
-                  style={{ top: index * CALENDAR_SLOT_HEIGHT, height: CALENDAR_SLOT_HEIGHT }}
-                >
-                  {index % 4 === 0 && (
-                    <span className="absolute left-0.5 top-0 z-10 -translate-y-1/2 bg-slate-50/95 px-0.5 text-[10px] font-medium leading-none text-muted-foreground">
+              {timeSlots.map((slot, index) => {
+                const hourMark = isHourBoundary(slot);
+                return (
+                  <div
+                    key={slot}
+                    className={cn(
+                      'absolute left-0 right-0',
+                      hourMark && 'border-t border-slate-200',
+                    )}
+                    style={{ top: index * CALENDAR_SLOT_HEIGHT, height: CALENDAR_SLOT_HEIGHT }}
+                  >
+                    <span
+                      className={cn(
+                        'absolute left-0.5 top-0 z-10 -translate-y-1/2 bg-slate-50/95 px-0.5 leading-none',
+                        hourMark
+                          ? 'text-[10px] font-bold text-slate-800'
+                          : 'text-[8px] font-normal text-muted-foreground',
+                      )}
+                    >
                       {formatTimeInputValue(slot)}
                     </span>
-                  )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-            {rooms.map((room) => (
-              <div
-                key={room.id}
-                className={roomColumnClass}
-              >
-                <div className="relative bg-slate-50/20" style={{ height: timelineHeight }}>
-                  {timeSlots.map((slot, index) => {
-                    const fillColor = getSlotFillColor(room.id, slot, bookings, selectedDate);
-                    return (
+          {rooms.map((room) => (
+            <div key={room.id} className={roomColumnClass}>
+              <div className="relative bg-slate-50/20" style={{ height: timelineHeight }}>
+                {timeSlots.map((slot, index) => {
+                  const fillColor = getSlotFillColor(room.id, slot, bookings, selectedDate);
+                  const hourMark = isHourBoundary(slot);
+                  return (
                     <button
                       key={`${room.id}-${slot}`}
                       type="button"
                       className={cn(
                         'absolute left-0 right-0 transition-colors',
                         'hover:bg-primary/5 focus-visible:bg-primary/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary',
-                        index % 4 === 0 && 'border-t border-slate-200',
+                        hourMark && 'border-t border-slate-200',
                         onEmptySlotClick && 'group cursor-pointer',
                       )}
                       style={{
@@ -210,49 +224,49 @@ export function BookingTimeline({
                       onClick={() => onEmptySlotClick?.(room.id, slot)}
                       aria-label={`Book ${room.name} at ${formatTimeInputValue(slot)}`}
                     >
-                      {onEmptySlotClick && index % 2 === 0 && (
+                      {onEmptySlotClick && index % CALENDAR_SLOTS_PER_HOUR === 0 && (
                         <Plus className="mx-auto hidden h-3 w-3 text-primary/40 group-hover:block" />
                       )}
                     </button>
-                    );
-                  })}
+                  );
+                })}
 
-                  {isToday && nowIndicatorTop !== null && (
+                {isToday && nowIndicatorTop !== null && (
+                  <div
+                    className="pointer-events-none absolute left-0 right-0 z-10 border-t-2 border-red-500"
+                    style={{ top: nowIndicatorTop }}
+                  >
+                    <span className="absolute -left-1 -top-2 rounded bg-red-500 px-1 text-[9px] font-bold text-white">
+                      Now
+                    </span>
+                  </div>
+                )}
+
+                {bookingsByRoom[room.id]?.map((booking) => {
+                  const { top, height } = getBookingPosition(booking, startHour);
+                  return (
                     <div
-                      className="pointer-events-none absolute left-0 right-0 z-10 border-t-2 border-red-500"
-                      style={{ top: nowIndicatorTop }}
+                      key={booking.id}
+                      className="pointer-events-none absolute left-0 right-0 z-[5]"
+                      style={{ top, height }}
                     >
-                      <span className="absolute -left-1 -top-2 rounded bg-red-500 px-1 text-[9px] font-bold text-white">
-                        Now
-                      </span>
-                    </div>
-                  )}
-
-                  {bookingsByRoom[room.id]?.map((booking) => {
-                    const { top, height } = getBookingPosition(booking);
-                    return (
-                      <div
-                        key={booking.id}
-                        className="pointer-events-none absolute left-0 right-0 z-[5]"
-                        style={{ top, height }}
-                      >
-                        <div className="pointer-events-auto relative h-full">
-                          <BookingCard
-                            booking={booking}
-                            onSelect={onSelectBooking}
-                            eventHeight={height}
-                            showActionsMenu={showBookingActions}
-                            onEdit={onEditBooking}
-                            onPostpone={onPostponeBooking}
-                            onCancel={onCancelBooking}
-                          />
-                        </div>
+                      <div className="pointer-events-auto relative h-full">
+                        <BookingCard
+                          booking={booking}
+                          onSelect={onSelectBooking}
+                          eventHeight={height}
+                          showActionsMenu={showBookingActions}
+                          onEdit={onEditBooking}
+                          onPostpone={onPostponeBooking}
+                          onCancel={onCancelBooking}
+                        />
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
+            </div>
+          ))}
         </div>
       </div>
     </div>

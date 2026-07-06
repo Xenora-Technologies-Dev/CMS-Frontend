@@ -2,6 +2,7 @@
 
 import type { Patient, Room, Therapist, Therapy } from '@/lib/types';
 import {
+  cn,
   combineDateAndTime,
   formatDateInput,
   formatTimeInputValue,
@@ -11,7 +12,7 @@ import {
   getTherapistName,
   parseDateInput,
 } from '@/lib/utils';
-import { canCompleteBooking } from '@/lib/appointment-list-utils';
+import { canCompleteBooking, canEditBooking, canRequestBookingEdit } from '@/lib/appointment-list-utils';
 import { BookingStatusBadge } from '@/components/booking/booking-status-badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -509,6 +510,85 @@ export function CancelBookingDialog({
   );
 }
 
+interface CompletedBookingPasswordDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title?: string;
+  description?: string;
+  onSubmit: (password: string) => Promise<void>;
+}
+
+export function CompletedBookingPasswordDialog({
+  open,
+  onOpenChange,
+  title = 'Edit Completed Appointment',
+  description = 'Enter the password to edit this completed booking.',
+  onSubmit,
+}: CompletedBookingPasswordDialogProps) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setPassword('');
+      setError(null);
+    }
+  }, [open]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!password.trim()) {
+      setError('Password is required');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await onSubmit(password.trim());
+      onOpenChange(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid password');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">{description}</p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="editPassword">Password</Label>
+            <Input
+              id="editPassword"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter password to confirm"
+              required
+              autoComplete="off"
+            />
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Verifying…' : 'Continue'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 interface BookingDetailDialogProps {
   booking: Booking | null;
   open: boolean;
@@ -596,10 +676,11 @@ export function BookingDetailDialog({
 
   const isStaffView = viewerRole === 'therapist' || viewerRole === 'doctor';
   const isConsultation = booking.bookingType === 'CONSULTATION';
-  const canModify =
-    !isStaffView &&
-    !isConsultation &&
-    ['SCHEDULED', 'CONFIRMED', 'PENDING_CONFIRMATION'].includes(booking.status);
+  const canEdit =
+    !isStaffView && !isConsultation && canRequestBookingEdit(booking);
+  const canPostpone =
+    !isStaffView && !isConsultation && canEditBooking(booking);
+  const canModifyActions = canEdit || canPostpone;
   const canComplete = !isStaffView && onComplete && canCompleteBooking(booking);
   const canComment = ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED'].includes(
     booking.status,
@@ -795,14 +876,23 @@ export function BookingDetailDialog({
               </Button>
             </div>
 
-            {canModify && onEdit && onReschedule && onCancel && (
-              <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3">
-                <Button variant="outline" className="w-full" onClick={onEdit}>
-                  Edit
-                </Button>
-                <Button variant="secondary" className="w-full" onClick={onReschedule}>
-                  Postpone
-                </Button>
+            {canModifyActions && onCancel && (
+              <div
+                className={cn(
+                  'grid w-full grid-cols-1 gap-2',
+                  canEdit && canPostpone ? 'sm:grid-cols-3' : 'sm:grid-cols-2',
+                )}
+              >
+                {canEdit && onEdit && (
+                  <Button variant="outline" className="w-full" onClick={onEdit}>
+                    Edit
+                  </Button>
+                )}
+                {canPostpone && onReschedule && (
+                  <Button variant="secondary" className="w-full" onClick={onReschedule}>
+                    Postpone
+                  </Button>
+                )}
                 <Button variant="destructive" className="w-full" onClick={onCancel}>
                   Cancel
                 </Button>

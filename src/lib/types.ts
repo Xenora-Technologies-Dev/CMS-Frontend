@@ -432,10 +432,12 @@ export interface PublicHoliday {
 export interface UpdateBookingPayload {
   patientId?: string;
   therapistId?: string;
+  doctorId?: string;
   roomId?: string;
   therapyId?: string;
   patientInsuranceId?: string | null;
   notes?: string | null;
+  editPassword?: string;
 }
 
 export interface RescheduleBookingPayload {

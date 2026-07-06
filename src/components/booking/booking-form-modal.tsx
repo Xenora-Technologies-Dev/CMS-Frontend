@@ -8,6 +8,7 @@ import { TherapySearch } from '@/components/booking/therapy-search';
 import { QuickAddPatientDialog } from '@/components/booking/quick-add-patient-dialog';
 import { QuickAddTherapyDialog } from '@/components/booking/quick-add-therapy-dialog';
 import { SlotOccupancyPreview } from '@/components/booking/slot-occupancy-preview';
+import { PatientVisitHistoryDialog } from '@/components/booking/patient-visit-history-dialog';
 import { useClinicOptional } from '@/components/providers/clinic-provider';
 import { useSocketEvent } from '@/components/providers/socket-provider';
 import { isAllowBookingOutsideConsultationHoursEnabled } from '@/lib/clinic-api';
@@ -43,7 +44,6 @@ import {
   createBooking,
   fetchBookingsForDateRange,
   fetchTherapistAvailability,
-  rescheduleBooking,
   searchPatients,
   searchTherapies,
   searchTherapists,
@@ -72,16 +72,20 @@ import { getActivePatientPackages } from '@/lib/treatment-plan-api';
 import type { Booking, Patient, Room, Therapist, Therapy, TreatmentPlan } from '@/lib/types';
 import {
   combineDateAndTime,
+  formatDate,
   formatDateInput,
   formatTime,
+  formatTimeInputValue,
   getPatientName,
   getTherapistColor,
   getTherapistName,
   parseDateInput,
+  startOfDay,
+  endOfDay,
   toTimeInputValue,
 } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, Loader2, Plus } from 'lucide-react';
+import { ArrowLeft, History, Loader2, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -115,6 +119,8 @@ interface BookingFormModalProps {
   dayBookings: Booking[];
   booking?: Booking | null;
   prefill?: BookingSlotPrefill;
+  /** Required when editing a completed booking (validated before opening). */
+  editPassword?: string;
   onSuccess: () => void;
   onTherapyCreated?: (therapy: Therapy) => void;
 }
@@ -130,6 +136,7 @@ export function BookingFormModal({
   dayBookings,
   booking,
   prefill,
+  editPassword,
   onSuccess,
   onTherapyCreated,
 }: BookingFormModalProps) {
@@ -157,6 +164,7 @@ export function BookingFormModal({
   const slotsBackgroundRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [quickAddPatientOpen, setQuickAddPatientOpen] = useState(false);
   const [quickAddTherapyOpen, setQuickAddTherapyOpen] = useState(false);
+  const [visitHistoryOpen, setVisitHistoryOpen] = useState(false);
   const [therapyOptions, setTherapyOptions] = useState<Therapy[]>(therapies);
   const [therapistOptions, setTherapistOptions] = useState<Therapist[]>(therapists);
   const [patientPackages, setPatientPackages] = useState<TreatmentPlan[]>([]);
@@ -190,9 +198,12 @@ export function BookingFormModal({
   const selectedRoom = rooms.find((r) => r.id === watched.roomId);
 
   const endTime = useMemo(() => {
+    if (mode === 'edit' && booking) {
+      return new Date(booking.endTime);
+    }
     if (!watched.date || !watched.startTime || !selectedTherapy) return null;
     return computeEndTimeFromSlot(watched.date, watched.startTime, selectedTherapy.durationMinutes);
-  }, [watched.date, watched.startTime, selectedTherapy]);
+  }, [mode, booking, watched.date, watched.startTime, selectedTherapy]);
 
   const slotPreviewInput: SlotValidationInput = useMemo(
     () => ({
@@ -223,8 +234,11 @@ export function BookingFormModal({
   );
 
   const validationOptions = useMemo(
-    () => ({ overrideScheduleConstraints }),
-    [overrideScheduleConstraints],
+    () => ({
+      overrideScheduleConstraints,
+      skipPastValidation: mode === 'edit',
+    }),
+    [overrideScheduleConstraints, mode],
   );
 
   const availableWindows = useMemo(
@@ -278,17 +292,26 @@ export function BookingFormModal({
     [scheduleSlots],
   );
 
+  const editSlotDate =
+    mode === 'edit' && booking ? formatDateInput(new Date(booking.startTime)) : watched.date;
+  const editSlotStartTime =
+    mode === 'edit' && booking ? toTimeInputValue(booking.startTime) : watched.startTime;
+  const editSlotDuration =
+    mode === 'edit' && booking
+      ? (selectedTherapy?.durationMinutes ?? booking.durationMinutes)
+      : (selectedTherapy?.durationMinutes ?? 0);
+
   const availableRooms = useMemo(
     () =>
       getAvailableRooms(
         rooms,
         previewBookings,
-        watched.date,
-        watched.startTime,
-        selectedTherapy?.durationMinutes ?? 0,
+        editSlotDate,
+        editSlotStartTime,
+        editSlotDuration,
         mode === 'edit' && booking ? booking.id : undefined,
       ),
-    [rooms, previewBookings, watched.date, watched.startTime, selectedTherapy, mode, booking],
+    [rooms, previewBookings, editSlotDate, editSlotStartTime, editSlotDuration, mode, booking],
   );
 
   const availabilityIssues = useMemo(
@@ -297,20 +320,30 @@ export function BookingFormModal({
   );
 
   const hasBlockingIssues = hasBlockingSlotIssues(availabilityIssues, validationOptions);
-  const scheduleReady = Boolean(watched.therapistId && watched.therapyId && watched.date);
-  const timeReady = Boolean(watched.startTime);
+
+  const scheduleReady =
+    mode === 'edit'
+      ? Boolean(booking)
+      : Boolean(watched.therapistId && watched.therapyId && watched.date);
+  const timeReady = mode === 'edit' ? true : Boolean(watched.startTime);
   const showRoomStep = scheduleReady && timeReady;
+  const roomOptions = availableRooms;
 
   const isFormValid =
-    form.formState.isValid &&
-    !hasBlockingIssues &&
-    Boolean(selectedTherapy?.durationMinutes) &&
-    Boolean(watched.roomId || mode === 'edit') &&
-    (mode === 'edit' ||
-      isContinuingPackage ||
-      !isPackage ||
-      (Boolean(packageSessions.trim()) &&
-        Number.parseInt(packageSessions, 10) >= 1));
+    mode === 'edit'
+      ? Boolean(
+          watched.patientId &&
+            watched.therapistId &&
+            watched.therapyId &&
+            watched.roomId,
+        )
+      : form.formState.isValid &&
+        !hasBlockingIssues &&
+        Boolean(selectedTherapy?.durationMinutes) &&
+        Boolean(watched.roomId) &&
+        (isContinuingPackage ||
+          !isPackage ||
+          (Boolean(packageSessions.trim()) && Number.parseInt(packageSessions, 10) >= 1));
 
   const resetForm = useCallback(() => {
     const baseDate = prefill?.date ?? defaultDate;
@@ -535,10 +568,24 @@ export function BookingFormModal({
   }, [open, mode, isContinuingPackage, watched.therapyId, selectedTherapy, patientPackages]);
 
   useEffect(() => {
-    if (!open || !scheduleReady) return;
+    if (!open || mode !== 'edit' || !booking) return;
+    let cancelled = false;
+    const date = new Date(booking.startTime);
+    const start = startOfDay(date);
+    const end = endOfDay(date);
+    void fetchBookingsForDateRange(start, end, 250).then((dayData) => {
+      if (!cancelled) setPreviewBookings(dayData);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, mode, booking]);
+
+  useEffect(() => {
+    if (!open || !scheduleReady || mode === 'edit') return;
     setPreviewBookings(dayBookingsRef.current);
     void loadSlotSchedule();
-  }, [open, scheduleReady, watched.therapistId, watched.date, loadSlotSchedule]);
+  }, [open, scheduleReady, mode, watched.therapistId, watched.date, loadSlotSchedule]);
 
   useSocketEvent(
     SocketEvents.LEAVE_UPDATED,
@@ -592,11 +639,11 @@ export function BookingFormModal({
   }, [watched.startTime, open, mode, form]);
 
   useEffect(() => {
-    if (!open || !showRoomStep || mode === 'edit') return;
+    if (!open || !showRoomStep) return;
     if (watched.roomId && !availableRooms.some((room) => room.id === watched.roomId)) {
       form.setValue('roomId', '');
     }
-  }, [availableRooms, watched.roomId, showRoomStep, open, mode, form]);
+  }, [availableRooms, watched.roomId, showRoomStep, open, form]);
 
   const handlePatientSearch = useCallback(
     (query: string, page = 1) => searchPatients(query, page),
@@ -660,43 +707,22 @@ export function BookingFormModal({
 
     if (!booking) return undefined;
 
-    const originalStart = new Date(booking.startTime).getTime();
-    const newStart = new Date(startIso).getTime();
-    const slotChanged =
-      newStart !== originalStart ||
-      values.therapistId !== booking.therapistId ||
-      values.roomId !== booking.roomId;
-
-    let targetId = booking.id;
-
-    if (slotChanged) {
-      const { booking: rescheduled } = await rescheduleBooking(booking.id, {
-        startTime: startIso,
-        therapistId: values.therapistId,
-        roomId: values.roomId,
-      });
-      targetId = rescheduled.id;
-    }
-
     const patientChanged = values.patientId !== booking.patientId;
     const therapyChanged = values.therapyId !== booking.therapyId;
     const notesChanged = (values.notes ?? '') !== (booking.notes ?? '');
-    const therapistChanged = !slotChanged && values.therapistId !== booking.therapistId;
-    const roomChanged = !slotChanged && values.roomId !== booking.roomId;
+    const therapistChanged = values.therapistId !== booking.therapistId;
+    const roomChanged = values.roomId !== booking.roomId;
 
-    if (
-      patientChanged ||
-      therapyChanged ||
-      notesChanged ||
-      therapistChanged ||
-      roomChanged
-    ) {
-      await updateBooking(targetId, {
+    if (patientChanged || therapyChanged || notesChanged || therapistChanged || roomChanged) {
+      await updateBooking(booking.id, {
         ...(patientChanged && { patientId: values.patientId }),
         ...(therapyChanged && { therapyId: values.therapyId }),
         ...(therapistChanged && { therapistId: values.therapistId }),
         ...(roomChanged && { roomId: values.roomId }),
         notes: values.notes?.trim() || null,
+        ...(booking.status === 'COMPLETED' && editPassword
+          ? { editPassword }
+          : {}),
       });
     }
 
@@ -707,15 +733,17 @@ export function BookingFormModal({
     if (confirming) return;
     setSubmitError(null);
 
-    const confirmInput: SlotValidationInput = {
-      ...slotPreviewInput,
-      dayBookings: previewBookings,
-    };
-    const issues = validateBookingSlot(confirmInput, validationOptions);
-    if (hasBlockingSlotIssues(issues, validationOptions)) {
-      setSubmitError('This slot is no longer available. Please choose another.');
-      setStep('form');
-      return;
+    if (mode === 'create') {
+      const confirmInput: SlotValidationInput = {
+        ...slotPreviewInput,
+        dayBookings: previewBookings,
+      };
+      const issues = validateBookingSlot(confirmInput, validationOptions);
+      if (hasBlockingSlotIssues(issues, validationOptions)) {
+        setSubmitError('This slot is no longer available. Please choose another.');
+        setStep('form');
+        return;
+      }
     }
 
     setConfirming(true);
@@ -742,6 +770,10 @@ export function BookingFormModal({
     setSubmitError(null);
     void form.handleSubmit(() => {
       void (async () => {
+        if (mode === 'edit') {
+          setStep('summary');
+          return;
+        }
         setReviewing(true);
         try {
           let freshBookings = previewBookings;
@@ -816,9 +848,10 @@ export function BookingFormModal({
               therapist={selectedTherapist}
               therapy={selectedTherapy}
               room={selectedRoom}
-              date={watched.date}
-              startTime={watched.startTime}
+              date={mode === 'edit' && booking ? formatDateInput(new Date(booking.startTime)) : watched.date}
+              startTime={mode === 'edit' && booking ? toTimeInputValue(booking.startTime) : watched.startTime}
               endTime={endTime}
+              mode={mode}
             />
             {submitError && <p className="text-sm text-destructive">{submitError}</p>}
             <DialogFooter>
@@ -887,12 +920,23 @@ export function BookingFormModal({
               />
 
               {mode === 'create' && watched.patientId && (
-                <PatientPackagesPanel
-                  plans={patientPackages}
-                  loading={packagesLoading}
-                  selectedPlanId={continuingPlanId}
-                  onSelectPlan={handleContinuePackage}
-                />
+                <>
+                  <PatientPackagesPanel
+                    plans={patientPackages}
+                    loading={packagesLoading}
+                    selectedPlanId={continuingPlanId}
+                    onSelectPlan={handleContinuePackage}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setVisitHistoryOpen(true)}
+                  >
+                    <History className="mr-2 h-4 w-4" />
+                    Patient Visit History
+                  </Button>
+                </>
               )}
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -973,7 +1017,33 @@ export function BookingFormModal({
                 />
               )}
 
-              {scheduleReady && (
+              {mode === 'edit' && booking && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <FormLabel>Date</FormLabel>
+                    <Input
+                      value={formatDate(booking.startTime)}
+                      readOnly
+                      disabled
+                      className="bg-muted"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Use Postpone to change the date or time slot.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <FormLabel>Time Slot</FormLabel>
+                    <Input
+                      value={`${formatTimeInputValue(toTimeInputValue(booking.startTime))} – ${formatTime(booking.endTime)}`}
+                      readOnly
+                      disabled
+                      className="bg-muted"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {mode === 'create' && scheduleReady && (
                 <FormField
                   control={form.control}
                   name="date"
@@ -989,7 +1059,7 @@ export function BookingFormModal({
                 />
               )}
 
-              {scheduleReady && selectedTherapy && (
+              {mode === 'create' && scheduleReady && selectedTherapy && (
                 <FormField
                   control={form.control}
                   name="startTime"
@@ -1035,9 +1105,8 @@ export function BookingFormModal({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {availableRooms.map((room) => {
-                            const fullRoom = rooms.find((r) => r.id === room.id);
-                            if (!fullRoom) return null;
+                          {roomOptions.map((room) => {
+                            const fullRoom = rooms.find((r) => r.id === room.id) ?? room;
                             return (
                               <SelectItem key={fullRoom.id} value={fullRoom.id}>
                                 {fullRoom.name}
@@ -1049,7 +1118,9 @@ export function BookingFormModal({
                       </Select>
                       {availableRooms.length === 0 && (
                         <p className="text-xs text-destructive">
-                          No rooms free at this time. Pick another slot.
+                          {mode === 'edit'
+                            ? 'No other rooms are free at this time slot.'
+                            : 'No rooms free at this time. Pick another slot.'}
                         </p>
                       )}
                       <FormMessage />
@@ -1072,7 +1143,7 @@ export function BookingFormModal({
                 )}
               />
 
-              {showRoomStep && watched.roomId && (
+              {mode === 'create' && showRoomStep && watched.roomId && (
                 <SlotOccupancyPreview input={slotPreviewInput} issues={availabilityIssues} />
               )}
 
@@ -1127,6 +1198,12 @@ export function BookingFormModal({
           onTherapyCreated?.(therapy);
           form.setValue('therapyId', therapy.id, { shouldValidate: true, shouldDirty: true });
         }}
+      />
+
+      <PatientVisitHistoryDialog
+        open={visitHistoryOpen}
+        onOpenChange={setVisitHistoryOpen}
+        patient={selectedPatient}
       />
 
     </>

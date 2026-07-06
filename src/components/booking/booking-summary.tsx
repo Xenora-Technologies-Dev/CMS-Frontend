@@ -14,6 +14,7 @@ interface BookingSummaryProps {
   date: string;
   startTime: string;
   endTime: Date;
+  mode?: 'create' | 'edit';
 }
 
 export function BookingSummary({
@@ -24,6 +25,7 @@ export function BookingSummary({
   date,
   startTime,
   endTime,
+  mode = 'create',
 }: BookingSummaryProps) {
   const formattedDate = formatDate(date + 'T00:00:00');
 
@@ -43,8 +45,10 @@ export function BookingSummary({
   return (
     <div className="space-y-4 rounded-lg border bg-slate-50 p-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-900">Booking Summary</h3>
-        <BookingStatusBadge status="SCHEDULED" />
+        <h3 className="text-sm font-semibold text-slate-900">
+          {mode === 'edit' ? 'Changes Summary' : 'Booking Summary'}
+        </h3>
+        {mode === 'create' && <BookingStatusBadge status="SCHEDULED" />}
       </div>
       <Separator />
       <dl className="space-y-3">
@@ -59,7 +63,9 @@ export function BookingSummary({
         ))}
       </dl>
       <p className="text-xs text-muted-foreground">
-        Review the details above before confirming the booking.
+        {mode === 'edit'
+          ? 'Review your changes before saving. Date and time cannot be changed here — use Postpone for that.'
+          : 'Review the details above before confirming the booking.'}
       </p>
     </div>
   );

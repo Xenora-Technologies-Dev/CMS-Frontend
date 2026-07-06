@@ -11,11 +11,14 @@ import { listTherapists } from '@/lib/therapist-api';
 import { listTherapies } from '@/lib/therapy-api';
 import { listPublicHolidays } from '@/lib/holiday-api';
 import type { Booking, PublicHoliday, Room, Therapist, Therapy } from '@/lib/types';
+import { canRequestBookingEdit, isCompletedBookingEdit } from '@/lib/appointment-list-utils';
+import { COMPLETED_BOOKING_PASSWORD } from '@/components/booking/booking-constants';
 import { cn, endOfDay, formatDate, getTherapistName, startOfDay } from '@/lib/utils';
 import { CalendarFilters } from '@/components/booking/calendar-filters';
 import {
   BookingDetailDialog,
   CancelBookingDialog,
+  CompletedBookingPasswordDialog,
 } from '@/components/booking/booking-dialogs';
 import { BookingFormModal, type BookingSlotPrefill } from '@/components/booking/booking-form-modal';
 import { BookingRescheduleModal } from '@/components/booking/booking-reschedule-modal';
@@ -84,6 +87,9 @@ export function BookingCalendar({
   const [slotPrefill, setSlotPrefill] = useState<BookingSlotPrefill | undefined>();
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [editPasswordOpen, setEditPasswordOpen] = useState(false);
+  const [editPassword, setEditPassword] = useState<string | undefined>();
+  const [pendingEditBooking, setPendingEditBooking] = useState<Booking | null>(null);
 
   const activeBookings = useMemo(
     () =>
@@ -194,22 +200,36 @@ export function BookingCalendar({
     setFormOpen(true);
   }
 
-  function openEdit() {
+  function openEditForm(booking: Booking, password?: string) {
+    setSelectedBooking(booking);
     setFormMode('edit');
     setSlotPrefill(undefined);
+    setEditPassword(password);
     setDetailOpen(false);
     setFormOpen(true);
   }
 
-  function handleEmptySlotClick(roomId: string, time: string) {
-    openCreate({ roomId, startTime: time, date: selectedDate });
+  function requestEdit(booking?: Booking) {
+    const target = booking ?? selectedBooking;
+    if (!target || !canRequestBookingEdit(target)) return;
+    if (isCompletedBookingEdit(target)) {
+      setPendingEditBooking(target);
+      setEditPasswordOpen(true);
+      return;
+    }
+    openEditForm(target);
+  }
+
+  function openEdit() {
+    requestEdit();
   }
 
   function openEditFromCard(booking: Booking) {
-    setSelectedBooking(booking);
-    setFormMode('edit');
-    setSlotPrefill(undefined);
-    setFormOpen(true);
+    requestEdit(booking);
+  }
+
+  function handleEmptySlotClick(roomId: string, time: string) {
+    openCreate({ roomId, startTime: time, date: selectedDate });
   }
 
   function openPostponeFromCard(booking: Booking) {
@@ -437,8 +457,12 @@ export function BookingCalendar({
         therapies={therapies}
         dayBookings={bookings}
         booking={formMode === 'edit' ? selectedBooking : null}
+        editPassword={editPassword}
         prefill={slotPrefill}
-        onSuccess={() => void loadData({ background: true })}
+        onSuccess={() => {
+          setEditPassword(undefined);
+          void loadData({ background: true });
+        }}
         onTherapyCreated={(therapy) => {
           setTherapies((prev) => {
             if (prev.some((t) => t.id === therapy.id)) return prev;
@@ -466,6 +490,22 @@ export function BookingCalendar({
         onOpenChange={setCancelOpen}
         isCompleted={selectedBooking?.status === 'COMPLETED'}
         onSubmit={handleCancel}
+      />
+
+      <CompletedBookingPasswordDialog
+        open={editPasswordOpen}
+        onOpenChange={(open) => {
+          setEditPasswordOpen(open);
+          if (!open) setPendingEditBooking(null);
+        }}
+        onSubmit={async (password) => {
+          if (password !== COMPLETED_BOOKING_PASSWORD) {
+            throw new Error('Invalid password');
+          }
+          if (!pendingEditBooking) return;
+          openEditForm(pendingEditBooking, password);
+          setPendingEditBooking(null);
+        }}
       />
     </div>
   );

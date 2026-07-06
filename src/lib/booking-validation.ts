@@ -74,6 +74,8 @@ export interface SlotValidationIssue {
 
 export interface SlotValidationOptions {
   overrideScheduleConstraints?: boolean;
+  /** Skip past-time check when editing metadata on an existing booking slot. */
+  skipPastValidation?: boolean;
 }
 
 export interface AvailableWindow {
@@ -750,7 +752,7 @@ export function validateBookingSlot(
   const end = computeEndTimeFromSlot(input.date, input.startTime, input.durationMinutes);
   const now = new Date();
 
-  if (start < now) {
+  if (!options?.skipPastValidation && start < now) {
     issues.push({ type: 'error', code: 'past', message: 'Cannot schedule bookings in the past' });
   }
 
