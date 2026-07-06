@@ -904,7 +904,7 @@ export function BookingDetailDialog({
               ['SCHEDULED', 'CONFIRMED', 'PENDING_CONFIRMATION', 'COMPLETED'].includes(
                 booking.status,
               ) &&
-              !canModify && (
+              !canModifyActions && (
                 <Button variant="destructive" className="w-full" onClick={onCancel}>
                   Cancel
                 </Button>

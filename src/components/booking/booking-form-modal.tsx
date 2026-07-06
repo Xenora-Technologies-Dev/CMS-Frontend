@@ -1105,15 +1105,12 @@ export function BookingFormModal({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {roomOptions.map((room) => {
-                            const fullRoom = rooms.find((r) => r.id === room.id) ?? room;
-                            return (
-                              <SelectItem key={fullRoom.id} value={fullRoom.id}>
-                                {fullRoom.name}
-                                {fullRoom.code ? ` (${fullRoom.code})` : ''}
+                          {roomOptions.map((room) => (
+                              <SelectItem key={room.id} value={room.id}>
+                                {room.name}
+                                {room.code ? ` (${room.code})` : ''}
                               </SelectItem>
-                            );
-                          })}
+                            ))}
                         </SelectContent>
                       </Select>
                       {availableRooms.length === 0 && (

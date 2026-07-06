@@ -667,14 +667,14 @@ export function computeAvailableStartTimes(
   return computeAvailableSlots({ windows, durationMinutes, date }).map((s) => s.startTime);
 }
 
-export function getAvailableRooms(
-  rooms: { id: string }[],
+export function getAvailableRooms<T extends { id: string }>(
+  rooms: T[],
   dayBookings: Booking[],
   date: string,
   startTime: string,
   durationMinutes: number,
   excludeBookingId?: string,
-): { id: string }[] {
+): T[] {
   if (!date || !startTime || !durationMinutes) return rooms;
   const start = combineDateAndTime(parseDateInput(date), startTime);
   const end = computeEndTimeFromSlot(date, startTime, durationMinutes);
