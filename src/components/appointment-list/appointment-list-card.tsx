@@ -15,7 +15,6 @@ import {
   canCompleteBooking,
   canEditBooking,
   canRequestBookingEdit,
-} from '@/lib/appointment-list-utils';
   canRestoreBooking,
   formatDateTime,
   formatUserName,
