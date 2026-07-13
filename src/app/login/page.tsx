@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/auth-provider';
 import { PasswordInput } from '@/components/shared/password-input';
@@ -104,7 +105,12 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <footer className="relative py-6 text-center">
+      <footer className="relative space-y-2 py-6 text-center">
+        <p className="text-xs text-muted-foreground">
+          <Link href="/privacy-policy" className="underline-offset-4 hover:underline">
+            Privacy Policy
+          </Link>
+        </p>
         <p className="text-xs text-muted-foreground">
           Design and Developed by{' '}
           <span className="font-semibold tracking-wide text-slate-700">XENORA</span>
