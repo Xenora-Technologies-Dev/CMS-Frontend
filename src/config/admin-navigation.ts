@@ -4,12 +4,14 @@ import {
   BookOpen,
   Building2,
   CalendarDays,
+  DatabaseBackup,
   DoorOpen,
   FileBarChart,
   HeartPulse,
   History,
   LayoutDashboard,
   Palmtree,
+  Radio,
   Shield,
   Stethoscope,
   User,
@@ -17,6 +19,7 @@ import {
   Users,
   UsersRound,
 } from 'lucide-react';
+import { enableWebhookActivity } from '@/lib/feature-flags';
 
 export interface AdminNavLink {
   type: 'link';
@@ -139,6 +142,16 @@ export const ADMIN_NAV_MAIN: AdminNavItem[] = [
     href: '/admin/activity-log',
     icon: History,
   },
+  ...(enableWebhookActivity
+    ? ([
+        {
+          type: 'link',
+          title: 'Webhook Activity',
+          href: '/admin/webhook-activity',
+          icon: Radio,
+        },
+      ] as AdminNavLink[])
+    : []),
 ];
 
 export const ADMIN_NAV_SECONDARY: AdminNavItem[] = [
@@ -147,6 +160,12 @@ export const ADMIN_NAV_SECONDARY: AdminNavItem[] = [
     title: 'Clinic Settings',
     href: '/admin/settings',
     icon: Building2,
+  },
+  {
+    type: 'link',
+    title: 'Backup & Restore',
+    href: '/admin/backup-restore',
+    icon: DatabaseBackup,
   },
   {
     type: 'link',
@@ -234,6 +253,10 @@ const PAGE_META: Record<string, AdminPageMeta> = {
     title: 'Activity Log',
     description: 'Audit trail of clinic actions and changes.',
   },
+  '/admin/webhook-activity': {
+    title: 'Webhook Activity',
+    description: 'Debug Meta WhatsApp webhook events and inbound messages.',
+  },
   '/admin/user-guide': {
     title: 'User Guide',
     description: 'Interactive guide for clinic administrators.',
@@ -242,6 +265,10 @@ const PAGE_META: Record<string, AdminPageMeta> = {
   '/admin/settings': {
     title: 'Clinic Settings',
     description: 'Optional clinic name, location, and contact details.',
+  },
+  '/admin/backup-restore': {
+    title: 'Backup & Restore',
+    description: 'Password-protected database backup to Google Drive and restore from zip.',
   },
   '/admin/profile': { title: 'Profile', description: 'Your account settings and preferences.' },
 };

@@ -57,6 +57,7 @@ import {
   formatDateInput,
   formatDuration,
   formatTime,
+  formatTimeInputValue,
   getDoctorColor,
   getDoctorName,
   getPatientName,
@@ -131,11 +132,24 @@ export function BookingRescheduleModal({
     [rooms, booking?.bookingType],
   );
 
+  const originalSlot = useMemo(() => {
+    if (!booking) return null;
+    return {
+      date: formatDateInput(new Date(booking.startTime)),
+      time: toTimeInputValue(booking.startTime),
+      roomId: booking.roomId,
+      staffId: isConsultation ? (booking.doctorId ?? '') : (booking.therapistId ?? ''),
+    };
+  }, [booking, isConsultation]);
+
   const selectedTherapist = therapists.find((t) => t.id === therapistId);
   const selectedDoctor = doctors.find((d) => d.id === doctorId);
   const durationMinutes = booking?.durationMinutes ?? booking?.therapy?.durationMinutes ?? 0;
   const staffId = isConsultation ? doctorId : therapistId;
   const scheduleReady = Boolean(staffId && dateValue && durationMinutes);
+  const isViewingOriginalDay = Boolean(
+    originalSlot && dateValue === originalSlot.date && staffId === originalSlot.staffId,
+  );
 
   const endTime = useMemo(() => {
     if (!dateValue || !time || !durationMinutes) return null;
@@ -182,23 +196,58 @@ export function BookingRescheduleModal({
   const availableWindows = isConsultation ? consultationWindows : therapyWindows;
 
   const scheduleSlots = useMemo(() => {
-    if (isConsultation) {
-      return computeConsultationScheduleSlots({
-        windows: consultationWindows,
-        durationMinutes,
-        date: dateValue,
-        dayBookings,
-        doctorId: doctorId || undefined,
-        excludeBookingId: booking?.id,
-      });
-    }
-    return computeScheduleSlots({
-      windows: therapyWindows,
+    const baseSlots = isConsultation
+      ? computeConsultationScheduleSlots({
+          windows: consultationWindows,
+          durationMinutes,
+          date: dateValue,
+          dayBookings,
+          doctorId: doctorId || undefined,
+          excludeBookingId: booking?.id,
+        })
+      : computeScheduleSlots({
+          windows: therapyWindows,
+          durationMinutes,
+          date: dateValue,
+          dayBookings,
+          therapistId,
+          excludeBookingId: booking?.id,
+        });
+
+    if (!isViewingOriginalDay || !originalSlot) return baseSlots;
+
+    // Keep the existing appointment slot selectable/highlighted on the same day.
+    const endFromDuration = computeEndTimeFromSlot(
+      dateValue,
+      originalSlot.time,
       durationMinutes,
-      date: dateValue,
-      dayBookings,
-      therapistId,
-      excludeBookingId: booking?.id,
+    );
+    const endLabel = endFromDuration
+      ? toTimeInputValue(endFromDuration)
+      : originalSlot.time;
+
+    const hasOriginal = baseSlots.some((slot) => slot.startTime === originalSlot.time);
+    const withCurrent = hasOriginal
+      ? baseSlots
+      : [
+          ...baseSlots,
+          {
+            startTime: originalSlot.time,
+            endTime: endLabel,
+            label: '',
+            available: true,
+          },
+        ].sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    return withCurrent.map((slot) => {
+      if (slot.startTime !== originalSlot.time) return slot;
+      const endTime = slot.endTime || endLabel;
+      return {
+        ...slot,
+        endTime,
+        available: true,
+        label: `${formatTimeInputValue(slot.startTime)} – ${formatTimeInputValue(endTime)} (current)`,
+      };
     });
   }, [
     isConsultation,
@@ -210,12 +259,21 @@ export function BookingRescheduleModal({
     doctorId,
     therapistId,
     booking?.id,
+    isViewingOriginalDay,
+    originalSlot,
   ]);
 
-  const availableStartTimes = useMemo(
-    () => scheduleSlots.filter((slot) => slot.available).map((slot) => slot.startTime),
-    [scheduleSlots],
-  );
+  const availableStartTimes = useMemo(() => {
+    const times = scheduleSlots.filter((slot) => slot.available).map((slot) => slot.startTime);
+    if (
+      isViewingOriginalDay &&
+      originalSlot &&
+      !times.includes(originalSlot.time)
+    ) {
+      return [...times, originalSlot.time];
+    }
+    return times;
+  }, [scheduleSlots, isViewingOriginalDay, originalSlot]);
 
   const availableRooms = useMemo(() => {
     if (isConsultation) {
@@ -419,18 +477,32 @@ export function BookingRescheduleModal({
   useEffect(() => {
     if (!open || isConsultation || overrideScheduleConstraints) return;
     if (time && !availableStartTimes.includes(time)) {
+      const keepOriginal =
+        isViewingOriginalDay && originalSlot && time === originalSlot.time;
+      if (keepOriginal) return;
       setTime('');
       setRoomId('');
     }
-  }, [availableStartTimes, time, open, overrideScheduleConstraints, isConsultation]);
+  }, [
+    availableStartTimes,
+    time,
+    open,
+    overrideScheduleConstraints,
+    isConsultation,
+    isViewingOriginalDay,
+    originalSlot,
+  ]);
 
   useEffect(() => {
     if (!open || !isConsultation) return;
     if (time && !availableStartTimes.includes(time)) {
+      const keepOriginal =
+        isViewingOriginalDay && originalSlot && time === originalSlot.time;
+      if (keepOriginal) return;
       setTime('');
       setRoomId('');
     }
-  }, [availableStartTimes, time, open, isConsultation]);
+  }, [availableStartTimes, time, open, isConsultation, isViewingOriginalDay, originalSlot]);
 
   useEffect(() => {
     if (!open) {
@@ -439,11 +511,16 @@ export function BookingRescheduleModal({
     }
     if (prevStaffIdRef.current && prevStaffIdRef.current !== staffId) {
       slotsLoadedForKeyRef.current = null;
-      setTime('');
-      setRoomId('');
+      if (originalSlot && dateValue === originalSlot.date && staffId === originalSlot.staffId) {
+        setTime(originalSlot.time);
+        setRoomId(originalSlot.roomId);
+      } else {
+        setTime('');
+        setRoomId('');
+      }
     }
     prevStaffIdRef.current = staffId;
-  }, [staffId, open]);
+  }, [staffId, open, originalSlot, dateValue]);
 
   useEffect(() => {
     if (!open) {
@@ -452,11 +529,16 @@ export function BookingRescheduleModal({
     }
     if (prevDateValueRef.current && prevDateValueRef.current !== dateValue) {
       slotsLoadedForKeyRef.current = null;
-      setTime('');
-      setRoomId('');
+      if (originalSlot && dateValue === originalSlot.date && staffId === originalSlot.staffId) {
+        setTime(originalSlot.time);
+        setRoomId(originalSlot.roomId);
+      } else {
+        setTime('');
+        setRoomId('');
+      }
     }
     prevDateValueRef.current = dateValue;
-  }, [dateValue, open]);
+  }, [dateValue, open, originalSlot, staffId]);
 
   useEffect(() => {
     if (!open) {
@@ -464,17 +546,24 @@ export function BookingRescheduleModal({
       return;
     }
     if (prevTimeRef.current && prevTimeRef.current !== time) {
-      setRoomId('');
+      if (originalSlot && dateValue === originalSlot.date && time === originalSlot.time) {
+        setRoomId(originalSlot.roomId);
+      } else {
+        setRoomId('');
+      }
     }
     prevTimeRef.current = time;
-  }, [time, open]);
+  }, [time, open, originalSlot, dateValue]);
 
   useEffect(() => {
     if (!open || !time) return;
     if (roomId && !availableRooms.some((room) => room.id === roomId)) {
+      if (originalSlot && time === originalSlot.time && roomId === originalSlot.roomId) {
+        return;
+      }
       setRoomId('');
     }
-  }, [availableRooms, roomId, time, open]);
+  }, [availableRooms, roomId, time, open, originalSlot]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
