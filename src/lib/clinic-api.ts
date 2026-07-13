@@ -5,6 +5,8 @@ export interface ClinicSettings {
   allowBookingOutsideConsultationHours: boolean;
   whatsappAppointmentMessaging: boolean;
   whatsappConfirmationPrompt: boolean;
+  whatsappAutoReplyEnabled: boolean;
+  whatsappAutoReplyTemplate: string | null;
 }
 
 export interface Clinic {
@@ -48,6 +50,31 @@ export function isWhatsAppMessagingEnabled(clinic: Clinic | null | undefined): b
 
 export function isWhatsAppConfirmationPromptEnabled(clinic: Clinic | null | undefined): boolean {
   return clinic?.settings?.whatsappConfirmationPrompt !== false;
+}
+
+export function isWhatsAppAutoReplyEnabled(clinic: Clinic | null | undefined): boolean {
+  return clinic?.settings?.whatsappAutoReplyEnabled === true;
+}
+
+export function getWhatsAppAutoReplyTemplate(clinic: Clinic | null | undefined): string {
+  return clinic?.settings?.whatsappAutoReplyTemplate?.trim() ?? '';
+}
+
+export interface WhatsAppIntegrationConfig {
+  callbackUrl: string | null;
+  verifyTokenConfigured: boolean;
+  whatsappApiConfigured: boolean;
+  templatesConfigured: boolean;
+  subscribeFields: string[];
+  settings: {
+    whatsappAppointmentMessaging: boolean;
+    whatsappAutoReplyEnabled: boolean;
+    whatsappAutoReplyTemplate: string | null;
+  };
+}
+
+export async function getWhatsAppIntegrationConfig(): Promise<WhatsAppIntegrationConfig> {
+  return apiRequest<WhatsAppIntegrationConfig>('/clinics/current/whatsapp-config');
 }
 
 export async function getCurrentClinic(): Promise<{ clinic: Clinic }> {

@@ -6,14 +6,15 @@ import {
   completeBooking,
   fetchBookingsForDate,
 } from '@/lib/booking-api';
+import { listDoctors } from '@/lib/doctor-api';
 import { listRooms } from '@/lib/room-api';
 import { listTherapists } from '@/lib/therapist-api';
 import { listTherapies } from '@/lib/therapy-api';
 import { listPublicHolidays } from '@/lib/holiday-api';
-import type { Booking, PublicHoliday, Room, Therapist, Therapy } from '@/lib/types';
+import type { Booking, BookingType, Doctor, PublicHoliday, Room, Therapist, Therapy } from '@/lib/types';
 import { canRequestBookingEdit, isCompletedBookingEdit } from '@/lib/appointment-list-utils';
 import { COMPLETED_BOOKING_PASSWORD } from '@/components/booking/booking-constants';
-import { cn, endOfDay, formatDate, getTherapistName, startOfDay } from '@/lib/utils';
+import { cn, endOfDay, formatDate, getDoctorName, getTherapistName, startOfDay } from '@/lib/utils';
 import { CalendarFilters } from '@/components/booking/calendar-filters';
 import {
   BookingDetailDialog,
@@ -21,6 +22,10 @@ import {
   CompletedBookingPasswordDialog,
 } from '@/components/booking/booking-dialogs';
 import { BookingFormModal, type BookingSlotPrefill } from '@/components/booking/booking-form-modal';
+import {
+  CreateConsultationBookingModal,
+  type ConsultationSlotPrefill,
+} from '@/components/booking/create-consultation-booking-modal';
 import { BookingRescheduleModal } from '@/components/booking/booking-reschedule-modal';
 import { BookingTimeline } from '@/components/booking/booking-timeline';
 import { Button } from '@/components/ui/button';
@@ -44,6 +49,19 @@ import { SocketEvents } from '@/lib/socket-events';
 const RESOURCE_LIMIT = 100;
 const ALL_VALUE = 'all';
 
+function sortRoomsTherapyFirst(rooms: Room[]): Room[] {
+  return [...rooms].sort((a, b) => {
+    const aConsult = a.roomType === 'CONSULTATION' ? 1 : 0;
+    const bConsult = b.roomType === 'CONSULTATION' ? 1 : 0;
+    if (aConsult !== bConsult) return aConsult - bConsult;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function roomBookingType(room: Room | undefined): BookingType {
+  return room?.roomType === 'CONSULTATION' ? 'CONSULTATION' : 'THERAPY';
+}
+
 interface BookingCalendarProps {
   lockedTherapistId?: string;
   hideTitle?: boolean;
@@ -54,9 +72,10 @@ interface BookingCalendarProps {
 export function BookingCalendar({
   lockedTherapistId,
   hideTitle,
-  pageTitle = 'Therapy Booking',
-  pageDescription = 'Daily view · 15-minute slots · therapy rooms · therapist color coding',
+  pageTitle = 'Bookings',
+  pageDescription = 'Daily view · therapy rooms then consultation rooms · staff color coding',
 }: BookingCalendarProps = {}) {
+  const unified = !lockedTherapistId;
   const { showBookingAction } = useToast();
   const { notifyAfterBookingAction } = useBookingWhatsApp();
   const clinicContext = useClinicOptional();
@@ -66,6 +85,7 @@ export function BookingCalendar({
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [therapists, setTherapists] = useState<Therapist[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [therapies, setTherapies] = useState<Therapy[]>([]);
   const [holidays, setHolidays] = useState<PublicHoliday[]>([]);
@@ -75,14 +95,15 @@ export function BookingCalendar({
   const hasLoadedOnce = useRef(false);
   const loadRequestIdRef = useRef(0);
 
-  const [filterTherapistId, setFilterTherapistId] = useState<string>(
-    lockedTherapistId ?? ALL_VALUE,
+  const [filterStaffKey, setFilterStaffKey] = useState<string>(
+    lockedTherapistId ? `therapist:${lockedTherapistId}` : ALL_VALUE,
   );
   const [filterRoomId, setFilterRoomId] = useState<string>(ALL_VALUE);
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
+  const [therapyFormOpen, setTherapyFormOpen] = useState(false);
+  const [consultationFormOpen, setConsultationFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [slotPrefill, setSlotPrefill] = useState<BookingSlotPrefill | undefined>();
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
@@ -90,6 +111,15 @@ export function BookingCalendar({
   const [editPasswordOpen, setEditPasswordOpen] = useState(false);
   const [editPassword, setEditPassword] = useState<string | undefined>();
   const [pendingEditBooking, setPendingEditBooking] = useState<Booking | null>(null);
+
+  const therapyRooms = useMemo(
+    () => rooms.filter((r) => r.roomType !== 'CONSULTATION'),
+    [rooms],
+  );
+  const consultationRooms = useMemo(
+    () => rooms.filter((r) => r.roomType === 'CONSULTATION'),
+    [rooms],
+  );
 
   const activeBookings = useMemo(
     () =>
@@ -101,14 +131,18 @@ export function BookingCalendar({
 
   const filteredBookings = useMemo(() => {
     let result = activeBookings;
-    if (filterTherapistId !== ALL_VALUE) {
-      result = result.filter((b) => b.therapistId === filterTherapistId);
+    if (filterStaffKey.startsWith('therapist:')) {
+      const therapistId = filterStaffKey.slice('therapist:'.length);
+      result = result.filter((b) => b.therapistId === therapistId);
+    } else if (filterStaffKey.startsWith('doctor:')) {
+      const doctorId = filterStaffKey.slice('doctor:'.length);
+      result = result.filter((b) => b.doctorId === doctorId);
     }
     if (filterRoomId !== ALL_VALUE) {
       result = result.filter((b) => b.roomId === filterRoomId);
     }
     return result;
-  }, [activeBookings, filterTherapistId, filterRoomId]);
+  }, [activeBookings, filterStaffKey, filterRoomId]);
 
   const filteredRooms = useMemo(() => {
     if (filterRoomId === ALL_VALUE) return rooms;
@@ -130,11 +164,23 @@ export function BookingCalendar({
       }
       setError(null);
       try {
-        const [dayBookings, therapistResult, roomResult, therapyResult, holidayResult] =
-          await Promise.all([
+        if (unified) {
+          const [
+            therapyBookings,
+            consultationBookings,
+            therapistResult,
+            doctorResult,
+            therapyRoomResult,
+            consultationRoomResult,
+            therapyResult,
+            holidayResult,
+          ] = await Promise.all([
             fetchBookingsForDate(selectedDate, RESOURCE_LIMIT, { bookingType: 'THERAPY' }),
+            fetchBookingsForDate(selectedDate, RESOURCE_LIMIT, { bookingType: 'CONSULTATION' }),
             listTherapists({ limit: RESOURCE_LIMIT, isActive: true }),
+            listDoctors({ limit: RESOURCE_LIMIT, isActive: true }),
             listRooms({ limit: RESOURCE_LIMIT, isActive: true, roomType: 'THERAPY' }),
+            listRooms({ limit: RESOURCE_LIMIT, isActive: true, roomType: 'CONSULTATION' }),
             listTherapies({ limit: RESOURCE_LIMIT, isActive: true }),
             listPublicHolidays({
               limit: RESOURCE_LIMIT,
@@ -142,16 +188,40 @@ export function BookingCalendar({
               dateTo: endOfDay(selectedDate).toISOString(),
             }),
           ]);
-        if (requestId !== loadRequestIdRef.current) return;
-        setBookings(dayBookings);
-        setTherapists(
-          lockedTherapistId
-            ? therapistResult.data.filter((t) => t.id === lockedTherapistId)
-            : therapistResult.data,
-        );
-        setRooms(roomResult.data);
-        setTherapies(therapyResult.data);
-        setHolidays(holidayResult.data);
+          if (requestId !== loadRequestIdRef.current) return;
+          setBookings([...therapyBookings, ...consultationBookings]);
+          setTherapists(therapistResult.data);
+          setDoctors(doctorResult.data);
+          setRooms(
+            sortRoomsTherapyFirst([...therapyRoomResult.data, ...consultationRoomResult.data]),
+          );
+          setTherapies(therapyResult.data);
+          setHolidays(holidayResult.data);
+        } else {
+          const [dayBookings, therapistResult, roomResult, therapyResult, holidayResult] =
+            await Promise.all([
+              fetchBookingsForDate(selectedDate, RESOURCE_LIMIT, { bookingType: 'THERAPY' }),
+              listTherapists({ limit: RESOURCE_LIMIT, isActive: true }),
+              listRooms({ limit: RESOURCE_LIMIT, isActive: true, roomType: 'THERAPY' }),
+              listTherapies({ limit: RESOURCE_LIMIT, isActive: true }),
+              listPublicHolidays({
+                limit: RESOURCE_LIMIT,
+                dateFrom: startOfDay(selectedDate).toISOString(),
+                dateTo: endOfDay(selectedDate).toISOString(),
+              }),
+            ]);
+          if (requestId !== loadRequestIdRef.current) return;
+          setBookings(dayBookings);
+          setTherapists(
+            lockedTherapistId
+              ? therapistResult.data.filter((t) => t.id === lockedTherapistId)
+              : therapistResult.data,
+          );
+          setDoctors([]);
+          setRooms(roomResult.data);
+          setTherapies(therapyResult.data);
+          setHolidays(holidayResult.data);
+        }
         hasLoadedOnce.current = true;
       } catch (err) {
         if (requestId !== loadRequestIdRef.current) return;
@@ -162,7 +232,7 @@ export function BookingCalendar({
         setRefreshing(false);
       }
     },
-    [selectedDate, lockedTherapistId],
+    [selectedDate, lockedTherapistId, unified],
   );
 
   useEffect(() => {
@@ -179,12 +249,12 @@ export function BookingCalendar({
 
   useEffect(() => {
     if (lockedTherapistId) {
-      setFilterTherapistId(lockedTherapistId);
+      setFilterStaffKey(`therapist:${lockedTherapistId}`);
     }
   }, [lockedTherapistId]);
 
   function handleClearFilters() {
-    if (!lockedTherapistId) setFilterTherapistId(ALL_VALUE);
+    if (!lockedTherapistId) setFilterStaffKey(ALL_VALUE);
     setFilterRoomId(ALL_VALUE);
   }
 
@@ -193,25 +263,49 @@ export function BookingCalendar({
     setDetailOpen(true);
   }
 
-  function openCreate(prefill?: BookingSlotPrefill) {
+  function openCreate(
+    type: BookingType = 'THERAPY',
+    prefill?: BookingSlotPrefill | ConsultationSlotPrefill,
+  ) {
     setFormMode('create');
     setSlotPrefill(prefill);
     setSelectedBooking(null);
-    setFormOpen(true);
+    setEditPassword(undefined);
+    if (type === 'CONSULTATION') {
+      setTherapyFormOpen(false);
+      setConsultationFormOpen(true);
+    } else {
+      setConsultationFormOpen(false);
+      setTherapyFormOpen(true);
+    }
+  }
+
+  function handleCreateBookingTypeChange(type: BookingType) {
+    const sharedPrefill = slotPrefill
+      ? {
+          startTime: slotPrefill.startTime,
+          date: slotPrefill.date,
+          // Drop room when switching type — room types are disjoint.
+          roomId: undefined as string | undefined,
+        }
+      : undefined;
+    openCreate(type, sharedPrefill);
   }
 
   function openEditForm(booking: Booking, password?: string) {
+    if (booking.bookingType === 'CONSULTATION') return;
     setSelectedBooking(booking);
     setFormMode('edit');
     setSlotPrefill(undefined);
     setEditPassword(password);
     setDetailOpen(false);
-    setFormOpen(true);
+    setConsultationFormOpen(false);
+    setTherapyFormOpen(true);
   }
 
   function requestEdit(booking?: Booking) {
     const target = booking ?? selectedBooking;
-    if (!target || !canRequestBookingEdit(target)) return;
+    if (!target || target.bookingType === 'CONSULTATION' || !canRequestBookingEdit(target)) return;
     if (isCompletedBookingEdit(target)) {
       setPendingEditBooking(target);
       setEditPasswordOpen(true);
@@ -229,10 +323,15 @@ export function BookingCalendar({
   }
 
   function handleEmptySlotClick(roomId: string, time: string) {
-    openCreate({ roomId, startTime: time, date: selectedDate });
+    const room = rooms.find((r) => r.id === roomId);
+    const type = roomBookingType(room);
+    if (type === 'CONSULTATION' && !consultationReady) return;
+    if (type === 'THERAPY' && !therapyReady) return;
+    openCreate(type, { roomId, startTime: time, date: selectedDate });
   }
 
   function openPostponeFromCard(booking: Booking) {
+    if (booking.bookingType === 'CONSULTATION') return;
     setSelectedBooking(booking);
     setRescheduleOpen(true);
   }
@@ -273,43 +372,78 @@ export function BookingCalendar({
 
   const dateLabel = formatDate(selectedDate);
 
-  const resourcesReady =
-    therapists.length > 0 && rooms.length > 0 && therapies.length > 0;
+  const therapyReady =
+    therapists.length > 0 && therapyRooms.length > 0 && therapies.length > 0;
+  const consultationReady = doctors.length > 0 && consultationRooms.length > 0;
+  const resourcesReady = unified ? therapyReady || consultationReady : therapyReady;
+  const canCreateDefault = therapyReady || (!therapyReady && consultationReady);
 
   const hasActiveFilters =
-    filterTherapistId !== ALL_VALUE || filterRoomId !== ALL_VALUE;
+    filterStaffKey !== ALL_VALUE || filterRoomId !== ALL_VALUE;
+
+  const staffFilterOptions = useMemo(() => {
+    const therapistOptions = therapists.map((t) => ({
+      key: `therapist:${t.id}`,
+      label: `${getTherapistName(t)} (Therapist)`,
+    }));
+    const doctorOptions = doctors.map((d) => ({
+      key: `doctor:${d.id}`,
+      label: `${getDoctorName(d)} (Doctor)`,
+    }));
+    return [...therapistOptions, ...doctorOptions].sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
+  }, [therapists, doctors]);
+
+  const missingResourcesMessage = (() => {
+    if (resourcesReady || initialLoading) return null;
+    if (!unified) {
+      return 'Add at least one active therapist, room, and therapy before creating bookings.';
+    }
+    const missing: string[] = [];
+    if (!therapyReady) missing.push('therapy resources (therapist, therapy room, therapy)');
+    if (!consultationReady) missing.push('consultation resources (doctor, consultation room)');
+    return `Add at least one of: ${missing.join(' or ')} before creating bookings.`;
+  })();
+
+  const dateToolbarActions = (
+    <>
+      <Button
+        variant="outline"
+        size="icon"
+        className="h-8 w-8"
+        onClick={() => void loadData({ background: true })}
+        aria-label="Refresh"
+        disabled={refreshing}
+      >
+        <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
+      </Button>
+      {!lockedTherapistId && (
+        <Button
+          size="sm"
+          className="h-8"
+          onClick={() => openCreate(therapyReady ? 'THERAPY' : 'CONSULTATION')}
+          disabled={!canCreateDefault}
+        >
+          <Plus className="h-4 w-4" />
+          Create Booking
+        </Button>
+      )}
+    </>
+  );
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        {!hideTitle && (
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">{pageTitle}</h1>
-            <p className="text-sm text-muted-foreground">{pageDescription}</p>
-          </div>
-        )}
-        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => void loadData({ background: true })}
-            aria-label="Refresh"
-            disabled={refreshing}
-          >
-            <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
-          </Button>
-          {!lockedTherapistId && (
-            <Button onClick={() => openCreate()} disabled={!resourcesReady}>
-              <Plus className="h-4 w-4" />
-              Create Booking
-            </Button>
-          )}
+      {!hideTitle && (
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{pageTitle}</h1>
+          <p className="text-sm text-muted-foreground">{pageDescription}</p>
         </div>
-      </div>
+      )}
 
-      {!resourcesReady && !initialLoading && (
+      {missingResourcesMessage && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          Add at least one active therapist, room, and therapy before creating bookings.
+          {missingResourcesMessage}
         </div>
       )}
 
@@ -330,25 +464,34 @@ export function BookingCalendar({
 
         <div className="min-w-0 flex-1 space-y-4">
           <div className="xl:hidden">
-            <CalendarFilters selectedDate={selectedDate} onDateChange={setSelectedDate} />
+            <CalendarFilters
+              selectedDate={selectedDate}
+              onDateChange={setSelectedDate}
+              headerActions={dateToolbarActions}
+            />
           </div>
           <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
-            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between">
-              <p className="text-sm font-medium text-slate-700">{dateLabel}</p>
-              {(clinicName || clinicLocation || clinic?.phone) && (
-                <p className="text-xs text-muted-foreground">
-                  {[clinicName, clinicLocation, clinic?.phone].filter(Boolean).join(' · ')}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+                  <p className="text-sm font-medium text-slate-700">{dateLabel}</p>
+                  {(clinicName || clinicLocation || clinic?.phone) && (
+                    <p className="text-xs text-muted-foreground">
+                      {[clinicName, clinicLocation, clinic?.phone].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {filteredBookings.length} active booking
+                  {filteredBookings.length === 1 ? '' : 's'}
+                  {hasActiveFilters && ' (filtered)'}
+                  {refreshing && ' · Updating…'}
+                  {!lockedTherapistId && ' · Click an empty cell to book · Hover a booking for actions'}
+                  {lockedTherapistId && ' · View-only schedule'}
                 </p>
-              )}
+              </div>
+              <div className="hidden shrink-0 items-center gap-2 xl:flex">{dateToolbarActions}</div>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {filteredBookings.length} active booking
-              {filteredBookings.length === 1 ? '' : 's'}
-              {hasActiveFilters && ' (filtered)'}
-              {refreshing && ' · Updating…'}
-              {!lockedTherapistId && ' · Click an empty cell to book · Hover a booking for actions'}
-              {lockedTherapistId && ' · View-only schedule'}
-            </p>
           </div>
 
           {!lockedTherapistId && (
@@ -365,16 +508,16 @@ export function BookingCalendar({
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-slate-700">Therapist</p>
-                  <Select value={filterTherapistId} onValueChange={setFilterTherapistId}>
+                  <p className="text-xs font-medium text-slate-700">Therapist/Doctor</p>
+                  <Select value={filterStaffKey} onValueChange={setFilterStaffKey}>
                     <SelectTrigger className="h-9">
-                      <SelectValue placeholder="All therapists" />
+                      <SelectValue placeholder="All" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={ALL_VALUE}>All therapists</SelectItem>
-                      {therapists.map((therapist) => (
-                        <SelectItem key={therapist.id} value={therapist.id}>
-                          {getTherapistName(therapist)}
+                      <SelectItem value={ALL_VALUE}>All</SelectItem>
+                      {staffFilterOptions.map((option) => (
+                        <SelectItem key={option.key} value={option.key}>
+                          {option.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -391,7 +534,10 @@ export function BookingCalendar({
                       {rooms.map((room) => (
                         <SelectItem key={room.id} value={room.id}>
                           {room.name}
-                          {room.code ? ` (${room.code})` : ''}
+                          {room.roomType === 'CONSULTATION'
+                            ? ' (Consultation)'
+                            : ' (Therapy)'}
+                          {room.code ? ` · ${room.code}` : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -410,22 +556,20 @@ export function BookingCalendar({
               No rooms available. Add rooms in Room Management.
             </div>
           ) : (
-            <>
-              <BookingTimeline
-                rooms={filteredRooms}
-                bookings={filteredBookings}
-                selectedDate={selectedDate}
-                holidays={holidays}
-                onSelectBooking={handleSelectBooking}
-                onEmptySlotClick={
-                  !lockedTherapistId && resourcesReady ? handleEmptySlotClick : undefined
-                }
-                showBookingActions={!lockedTherapistId}
-                onEditBooking={openEditFromCard}
-                onPostponeBooking={openPostponeFromCard}
-                onCancelBooking={openCancelFromCard}
-              />
-            </>
+            <BookingTimeline
+              rooms={filteredRooms}
+              bookings={filteredBookings}
+              selectedDate={selectedDate}
+              holidays={holidays}
+              onSelectBooking={handleSelectBooking}
+              onEmptySlotClick={
+                !lockedTherapistId && resourcesReady ? handleEmptySlotClick : undefined
+              }
+              showBookingActions={!lockedTherapistId}
+              onEditBooking={openEditFromCard}
+              onPostponeBooking={openPostponeFromCard}
+              onCancelBooking={openCancelFromCard}
+            />
           )}
         </div>
       </div>
@@ -436,6 +580,7 @@ export function BookingCalendar({
         onOpenChange={setDetailOpen}
         onEdit={openEdit}
         onReschedule={() => {
+          if (selectedBooking?.bookingType === 'CONSULTATION') return;
           setDetailOpen(false);
           setRescheduleOpen(true);
         }}
@@ -449,16 +594,19 @@ export function BookingCalendar({
 
       <BookingFormModal
         mode={formMode}
-        open={formOpen}
-        onOpenChange={setFormOpen}
+        open={therapyFormOpen}
+        onOpenChange={setTherapyFormOpen}
         defaultDate={selectedDate}
         therapists={therapists}
-        rooms={rooms}
+        rooms={therapyRooms}
         therapies={therapies}
         dayBookings={bookings}
         booking={formMode === 'edit' ? selectedBooking : null}
         editPassword={editPassword}
         prefill={slotPrefill}
+        onBookingTypeChange={
+          unified && formMode === 'create' ? handleCreateBookingTypeChange : undefined
+        }
         onSuccess={() => {
           setEditPassword(undefined);
           void loadData({ background: true });
@@ -471,12 +619,25 @@ export function BookingCalendar({
         }}
       />
 
+      {unified && (
+        <CreateConsultationBookingModal
+          open={consultationFormOpen}
+          onOpenChange={setConsultationFormOpen}
+          defaultDate={selectedDate}
+          doctors={doctors}
+          rooms={consultationRooms}
+          prefill={slotPrefill}
+          onBookingTypeChange={handleCreateBookingTypeChange}
+          onSuccess={() => void loadData({ background: true })}
+        />
+      )}
+
       <BookingRescheduleModal
         open={rescheduleOpen}
         onOpenChange={setRescheduleOpen}
         booking={selectedBooking}
         therapists={therapists}
-        rooms={rooms}
+        rooms={therapyRooms}
         onSuccess={(newStartTime) => {
           if (newStartTime) {
             setSelectedDate(new Date(newStartTime));

@@ -10,10 +10,6 @@ export default function DoctorProfilePage() {
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
-        <p className="text-sm text-muted-foreground">Your account details.</p>
-      </div>
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Account</CardTitle>

@@ -139,13 +139,7 @@ export function PublicHolidayManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Public Holidays</h1>
-          <p className="text-sm text-muted-foreground">
-            Holidays appear on therapy and consultation booking calendars.
-          </p>
-        </div>
+      <div className="flex justify-end">
         <Button onClick={startCreate}>
           <Plus className="mr-2 h-4 w-4" />
           Add holiday

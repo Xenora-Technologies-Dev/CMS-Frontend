@@ -67,12 +67,7 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Clinic overview for today</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -83,9 +78,8 @@ export function AdminDashboard() {
             Refresh
           </Button>
           <Button size="sm" asChild>
-            <Link href="/admin/appointments/calendar">Open Calendar</Link>
+            <Link href="/admin/appointments/calendar">Open Bookings</Link>
           </Button>
-        </div>
       </div>
 
       {error && (

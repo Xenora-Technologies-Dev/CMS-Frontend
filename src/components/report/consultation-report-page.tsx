@@ -60,13 +60,6 @@ export function ConsultationReportPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Consultation Report</h1>
-        <p className="text-sm text-muted-foreground">
-          Consultation booking log with date, time, and patient details.
-        </p>
-      </div>
-
       <ReportDateRangePanel
         dateFrom={dateFrom}
         dateTo={dateTo}

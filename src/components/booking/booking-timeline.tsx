@@ -156,9 +156,10 @@ export function BookingTimeline({
             <div key={room.id} className={roomColumnClass}>
               <div className="flex h-12 flex-col justify-center px-2">
                 <p className="truncate text-sm font-bold text-slate-900">{room.name}</p>
-                {room.code && (
-                  <p className="truncate text-[10px] font-medium text-slate-600">{room.code}</p>
-                )}
+                <p className="truncate text-[10px] font-medium text-slate-600">
+                  {room.roomType === 'CONSULTATION' ? 'Consultation' : 'Therapy'}
+                  {room.code ? ` · ${room.code}` : ''}
+                </p>
               </div>
             </div>
           ))}

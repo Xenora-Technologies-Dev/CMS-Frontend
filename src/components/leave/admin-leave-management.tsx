@@ -244,13 +244,6 @@ export function AdminLeaveManagement() {
         description={progress.description}
       />
 
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Leave Management</h1>
-        <p className="text-sm text-muted-foreground">
-          Review pending requests, enter leave, and resolve booking conflicts
-        </p>
-      </div>
-
       <AdminLeaveEntryForm therapists={therapists} onSuccess={() => void load()} />
 
       <BookingsNeedsAttentionPanel />

@@ -66,12 +66,7 @@ export function DoctorDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">My Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Your consultation schedule and history</p>
-        </div>
-        <div className="flex gap-2">
+      <div className="flex flex-wrap justify-end gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -87,7 +82,6 @@ export function DoctorDashboard() {
               My Calendar
             </Link>
           </Button>
-        </div>
       </div>
 
       {error && (

@@ -48,8 +48,7 @@ export const ADMIN_NAV_MAIN: AdminNavItem[] = [
     title: 'Appointments',
     icon: CalendarDays,
     items: [
-      { title: 'Therapy Booking', href: '/admin/appointments/calendar' },
-      { title: 'Consultation Booking', href: '/admin/appointments/consultation' },
+      { title: 'Bookings', href: '/admin/appointments/calendar' },
       { title: 'Appointment List', href: '/admin/appointments/list' },
       { title: 'Pending Confirmation', href: '/admin/appointments/pending-confirmation' },
       { title: 'Recent Bookings', href: '/admin/appointments/recent' },
@@ -173,12 +172,14 @@ export interface AdminPageMeta {
 const PAGE_META: Record<string, AdminPageMeta> = {
   '/admin': { title: 'Dashboard', description: 'Overview of clinic operations and key metrics.' },
   '/admin/appointments/calendar': {
-    title: 'Therapy Booking',
-    description: 'Schedule and manage therapy appointments across therapy rooms.',
+    title: 'Bookings',
+    description:
+      'Schedule therapy and consultation appointments. Therapy rooms appear first, then consultation rooms.',
   },
   '/admin/appointments/consultation': {
-    title: 'Consultation Booking',
-    description: 'Schedule and manage doctor consultations across consultation rooms.',
+    title: 'Bookings',
+    description:
+      'Schedule therapy and consultation appointments. Therapy rooms appear first, then consultation rooms.',
   },
   '/admin/appointments/list': {
     title: 'Appointment List',

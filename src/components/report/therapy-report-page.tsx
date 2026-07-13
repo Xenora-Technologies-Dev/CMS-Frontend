@@ -61,13 +61,6 @@ export function TherapyReportPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Therapy Report</h1>
-        <p className="text-sm text-muted-foreground">
-          Therapy booking statistics and completed session details for a date range.
-        </p>
-      </div>
-
       <ReportDateRangePanel
         dateFrom={dateFrom}
         dateTo={dateTo}

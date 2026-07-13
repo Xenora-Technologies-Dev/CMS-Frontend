@@ -21,6 +21,9 @@ export interface ListAuditLogsParams {
   limit?: number;
   entityType?: string;
   action?: string;
+  search?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export async function listAuditLogs(
@@ -31,6 +34,9 @@ export async function listAuditLogs(
   if (params.limit) search.set('limit', String(params.limit));
   if (params.entityType) search.set('entityType', params.entityType);
   if (params.action) search.set('action', params.action);
+  if (params.search?.trim()) search.set('search', params.search.trim());
+  if (params.dateFrom) search.set('dateFrom', params.dateFrom);
+  if (params.dateTo) search.set('dateTo', params.dateTo);
   const qs = search.toString();
   return apiRequestPaginated<AuditLogItem>(`/audit-logs${qs ? `?${qs}` : ''}`);
 }

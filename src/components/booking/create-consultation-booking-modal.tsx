@@ -60,6 +60,8 @@ interface CreateConsultationBookingModalProps {
   rooms: Room[];
   prefill?: ConsultationSlotPrefill;
   onSuccess: () => void;
+  /** When set, shows booking type selector (defaults to Consultation while open). */
+  onBookingTypeChange?: (type: 'THERAPY' | 'CONSULTATION') => void;
 }
 
 const DURATION_OPTIONS = [15, 30, 45, 60];
@@ -72,6 +74,7 @@ export function CreateConsultationBookingModal({
   rooms,
   prefill,
   onSuccess,
+  onBookingTypeChange,
 }: CreateConsultationBookingModalProps) {
   const { showBookingSuccess } = useToast();
   const { notifyAfterBookingAction } = useBookingWhatsApp();
@@ -284,6 +287,25 @@ export function CreateConsultationBookingModal({
             <DialogTitle>Create Consultation Booking</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {onBookingTypeChange && (
+              <div className="space-y-1.5">
+                <Label>Booking type</Label>
+                <Select
+                  value="CONSULTATION"
+                  onValueChange={(value) => {
+                    if (value === 'THERAPY') onBookingTypeChange('THERAPY');
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="THERAPY">Therapy Booking</SelectItem>
+                    <SelectItem value="CONSULTATION">Consultation Booking</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Patient *</Label>

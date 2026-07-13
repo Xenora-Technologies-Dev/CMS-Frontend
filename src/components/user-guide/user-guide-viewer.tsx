@@ -4,7 +4,7 @@ import type { UserGuideContent } from '@/content/user-guide-content';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { APP_NAME, APP_VERSION } from '@/lib/version';
-import { BookOpen, ChevronDown, Lightbulb, Search } from 'lucide-react';
+import { ChevronDown, Lightbulb, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -44,10 +44,6 @@ export function UserGuideViewer({ guide, showPrintHint = true }: UserGuideViewer
       <div className="rounded-xl border bg-gradient-to-br from-teal-50 to-white p-6 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-teal-700" />
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">{guide.title}</h1>
-            </div>
             <p className="max-w-3xl text-sm text-muted-foreground">{guide.introduction}</p>
             <Badge variant="secondary" className="mt-1">
               {APP_NAME} v{APP_VERSION}

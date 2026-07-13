@@ -89,11 +89,6 @@ export function TherapistLeaveManagement() {
     <div className="space-y-6">
       <ProgressDialog open={progress.open} title={progress.title} description={progress.description} />
 
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Leave Management</h1>
-        <p className="text-sm text-muted-foreground">Submit and manage your leave requests</p>
-      </div>
-
       {conflictNotice && (
         <div
           role="alert"

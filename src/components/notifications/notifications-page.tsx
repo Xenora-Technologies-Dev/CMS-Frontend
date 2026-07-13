@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { PaginatedMeta } from '@/lib/types';
 import { listNotifications, type Notification } from '@/lib/notification-api';
 import { useNotificationAttention } from '@/hooks/use-notification-attention';
-import { Bell, CheckCheck, RefreshCw } from 'lucide-react';
+import { CheckCheck, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { cn, formatDateTime } from '@/lib/utils';
 
@@ -75,22 +75,12 @@ export function NotificationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-            <Bell className="h-6 w-6 text-primary" />
-            Notifications
-            {unreadTotal > 0 && (
-              <span className="rounded-full bg-destructive px-2.5 py-0.5 text-sm font-semibold text-destructive-foreground">
-                {unreadTotal} unread
-              </span>
-            )}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Appointment updates, leave requests, and system messages — updated in real time
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+          {unreadTotal > 0 && (
+            <span className="rounded-full bg-destructive px-2.5 py-0.5 text-sm font-semibold text-destructive-foreground">
+              {unreadTotal} unread
+            </span>
+          )}
           <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />
             Refresh
@@ -101,7 +91,6 @@ export function NotificationsPage() {
               Mark all read
             </Button>
           )}
-        </div>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

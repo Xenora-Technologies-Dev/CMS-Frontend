@@ -123,6 +123,8 @@ interface BookingFormModalProps {
   editPassword?: string;
   onSuccess: () => void;
   onTherapyCreated?: (therapy: Therapy) => void;
+  /** When set in create mode, shows booking type selector (Therapy default). */
+  onBookingTypeChange?: (type: 'THERAPY' | 'CONSULTATION') => void;
 }
 
 export function BookingFormModal({
@@ -139,6 +141,7 @@ export function BookingFormModal({
   editPassword,
   onSuccess,
   onTherapyCreated,
+  onBookingTypeChange,
 }: BookingFormModalProps) {
   const { showBookingSuccess } = useToast();
   const { notifyAfterBookingAction } = useBookingWhatsApp();
@@ -836,6 +839,25 @@ export function BookingFormModal({
             {mode === 'create' ? 'Create a therapy booking' : 'Edit therapy booking details'}
           </DialogDescription>
         </DialogHeader>
+        {mode === 'create' && onBookingTypeChange && step === 'form' && (
+          <div className="space-y-1.5 border-b pb-4">
+            <label className="text-sm font-medium leading-none">Booking type</label>
+            <Select
+              value="THERAPY"
+              onValueChange={(value) => {
+                if (value === 'CONSULTATION') onBookingTypeChange('CONSULTATION');
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="THERAPY">Therapy Booking</SelectItem>
+                <SelectItem value="CONSULTATION">Consultation Booking</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {step === 'summary' &&
         selectedTherapy &&

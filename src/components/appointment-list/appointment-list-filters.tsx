@@ -10,9 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { StatusGroupFilter, Therapist, Therapy } from '@/lib/types';
+import type { BookingType, Doctor, StatusGroupFilter, Therapist, Therapy } from '@/lib/types';
+import { cn, getDoctorName, getTherapistName } from '@/lib/utils';
 import { RefreshCw, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 const STATUS_GROUPS: { value: StatusGroupFilter | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All Statuses' },
@@ -23,9 +23,11 @@ const STATUS_GROUPS: { value: StatusGroupFilter | 'ALL'; label: string }[] = [
 ];
 
 export interface AppointmentListFiltersState {
+  bookingType: BookingType;
   patientName: string;
   patientPhone: string;
   therapistId: string;
+  doctorId: string;
   therapyId: string;
   statusGroup: StatusGroupFilter | 'ALL';
   dateFrom: string;
@@ -35,6 +37,7 @@ export interface AppointmentListFiltersState {
 interface AppointmentListFiltersProps {
   filters: AppointmentListFiltersState;
   therapists: Therapist[];
+  doctors: Doctor[];
   therapies: Therapy[];
   loading?: boolean;
   onChange: (filters: AppointmentListFiltersState) => void;
@@ -45,6 +48,7 @@ interface AppointmentListFiltersProps {
 export function AppointmentListFilters({
   filters,
   therapists,
+  doctors,
   therapies,
   loading,
   onChange,
@@ -54,6 +58,8 @@ export function AppointmentListFilters({
   function patch(partial: Partial<AppointmentListFiltersState>) {
     onChange({ ...filters, ...partial });
   }
+
+  const isConsultation = filters.bookingType === 'CONSULTATION';
 
   return (
     <div className="space-y-4 rounded-xl border bg-white p-4 shadow-sm">
@@ -72,6 +78,29 @@ export function AppointmentListFilters({
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <div className="space-y-1.5">
+          <Label>Booking Type</Label>
+          <Select
+            value={filters.bookingType}
+            onValueChange={(v) => {
+              const bookingType = v as BookingType;
+              patch({
+                bookingType,
+                therapistId: '',
+                therapyId: '',
+                doctorId: '',
+              });
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="THERAPY">Therapy Booking</SelectItem>
+              <SelectItem value="CONSULTATION">Consultation Booking</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
           <Label htmlFor="patientName">Patient Name</Label>
           <Input
             id="patientName"
@@ -89,44 +118,68 @@ export function AppointmentListFilters({
             onChange={(e) => patch({ patientPhone: e.target.value })}
           />
         </div>
-        <div className="space-y-1.5">
-          <Label>Therapist</Label>
-          <Select
-            value={filters.therapistId || 'all'}
-            onValueChange={(v) => patch({ therapistId: v === 'all' ? '' : v })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="All therapists" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All therapists</SelectItem>
-              {therapists.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.user?.firstName} {t.user?.lastName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Therapy</Label>
-          <Select
-            value={filters.therapyId || 'all'}
-            onValueChange={(v) => patch({ therapyId: v === 'all' ? '' : v })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="All therapies" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All therapies</SelectItem>
-              {therapies.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {isConsultation ? (
+          <div className="space-y-1.5">
+            <Label>Doctor</Label>
+            <Select
+              value={filters.doctorId || 'all'}
+              onValueChange={(v) => patch({ doctorId: v === 'all' ? '' : v })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="All doctors" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All doctors</SelectItem>
+                {doctors.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {getDoctorName(d)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-1.5">
+              <Label>Therapist</Label>
+              <Select
+                value={filters.therapistId || 'all'}
+                onValueChange={(v) => patch({ therapistId: v === 'all' ? '' : v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All therapists" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All therapists</SelectItem>
+                  {therapists.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {getTherapistName(t)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Therapy</Label>
+              <Select
+                value={filters.therapyId || 'all'}
+                onValueChange={(v) => patch({ therapyId: v === 'all' ? '' : v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All therapies" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All therapies</SelectItem>
+                  {therapies.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
         <div className="space-y-1.5">
           <Label>Status</Label>
           <Select
@@ -171,9 +224,11 @@ export function AppointmentListFilters({
 }
 
 export const DEFAULT_APPOINTMENT_FILTERS: AppointmentListFiltersState = {
+  bookingType: 'THERAPY',
   patientName: '',
   patientPhone: '',
   therapistId: '',
+  doctorId: '',
   therapyId: '',
   statusGroup: 'ALL',
   dateFrom: '',

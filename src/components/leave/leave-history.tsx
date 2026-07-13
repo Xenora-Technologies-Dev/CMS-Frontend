@@ -401,15 +401,6 @@ export function LeaveHistory({ viewerRole }: LeaveHistoryProps) {
         description={progress.description}
       />
 
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Leave History</h1>
-        <p className="text-sm text-muted-foreground">
-          {viewerRole === 'admin'
-            ? 'Browse upcoming, today’s, and past therapist leave records.'
-            : 'Browse your upcoming, today’s, and past leave records.'}
-        </p>
-      </div>
-
       {actionError && (
         <div
           role="alert"

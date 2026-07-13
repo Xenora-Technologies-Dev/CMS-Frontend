@@ -1,5 +1,5 @@
-import { ConsultationBookingCalendar } from '@/components/booking/consultation-booking-calendar';
+import { redirect } from 'next/navigation';
 
 export default function ConsultationBookingPage() {
-  return <ConsultationBookingCalendar />;
+  redirect('/admin/appointments/calendar');
 }

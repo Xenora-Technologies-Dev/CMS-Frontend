@@ -15,8 +15,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 import {
+  getWhatsAppAutoReplyTemplate,
   isAllowBookingOutsideConsultationHoursEnabled,
   isAutoDownloadSlipsEnabled,
+  isWhatsAppAutoReplyEnabled,
   isWhatsAppConfirmationPromptEnabled,
   isWhatsAppMessagingEnabled,
   updateCurrentClinic,
@@ -51,6 +53,8 @@ export default function ClinicSettingsPage() {
 
   const [whatsappAppointmentMessaging, setWhatsappAppointmentMessaging] = useState(true);
   const [whatsappConfirmationPrompt, setWhatsappConfirmationPrompt] = useState(true);
+  const [whatsappAutoReplyEnabled, setWhatsappAutoReplyEnabled] = useState(false);
+  const [whatsappAutoReplyTemplate, setWhatsappAutoReplyTemplate] = useState('');
 
   const [saving, setSaving] = useState(false);
 
@@ -83,10 +87,10 @@ export default function ClinicSettingsPage() {
     );
     setWhatsappAppointmentMessaging(isWhatsAppMessagingEnabled(clinic));
     setWhatsappConfirmationPrompt(isWhatsAppConfirmationPromptEnabled(clinic));
+    setWhatsappAutoReplyEnabled(isWhatsAppAutoReplyEnabled(clinic));
+    setWhatsappAutoReplyTemplate(getWhatsAppAutoReplyTemplate(clinic));
 
   }, [clinic]);
-
-
 
   async function handleSubmit(e: React.FormEvent) {
 
@@ -120,7 +124,13 @@ export default function ClinicSettingsPage() {
           whatsappAppointmentMessaging,
           whatsappConfirmationPrompt: whatsappAppointmentMessaging
             ? whatsappConfirmationPrompt
-            : true,
+            : false,
+          whatsappAutoReplyEnabled:
+            whatsappAppointmentMessaging && whatsappAutoReplyEnabled,
+          whatsappAutoReplyTemplate:
+            whatsappAppointmentMessaging && whatsappAutoReplyEnabled
+              ? whatsappAutoReplyTemplate.trim() || null
+              : null,
         },
 
       });
@@ -499,7 +509,15 @@ export default function ClinicSettingsPage() {
 
                 aria-label="WhatsApp appointment messaging"
 
-                onClick={() => setWhatsappAppointmentMessaging((prev) => !prev)}
+                onClick={() => {
+                  setWhatsappAppointmentMessaging((prev) => {
+                    const next = !prev;
+                    if (!next) {
+                      setWhatsappAutoReplyEnabled(false);
+                    }
+                    return next;
+                  });
+                }}
 
                 className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors ${
 
@@ -594,6 +612,67 @@ export default function ClinicSettingsPage() {
               </button>
 
             </label>
+
+
+
+            <label
+              className={`flex items-start justify-between gap-4 rounded-lg border px-4 py-3 ${
+                whatsappAppointmentMessaging ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+              }`}
+            >
+              <div>
+                <p className="font-medium text-slate-900">Automatic reply to patient messages</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  When a patient messages your clinic WhatsApp number, send an approved Utility
+                  template automatically. Use a text-only template, or one with{' '}
+                  <code className="rounded bg-slate-100 px-1">{'{{1}}'}</code> for the patient name.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={whatsappAutoReplyEnabled}
+                aria-label="WhatsApp automatic reply"
+                disabled={!whatsappAppointmentMessaging}
+                onClick={() => setWhatsappAutoReplyEnabled((prev) => !prev)}
+                className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors ${
+                  whatsappAppointmentMessaging && whatsappAutoReplyEnabled
+                    ? 'bg-primary'
+                    : 'bg-slate-200'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    whatsappAppointmentMessaging && whatsappAutoReplyEnabled
+                      ? 'translate-x-5'
+                      : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </label>
+
+
+
+            <div
+              className={`space-y-2 rounded-lg border px-4 py-3 ${
+                whatsappAppointmentMessaging && whatsappAutoReplyEnabled ? '' : 'opacity-60'
+              }`}
+            >
+              <Label htmlFor="whatsappAutoReplyTemplate">Auto-reply template name</Label>
+              <Input
+                id="whatsappAutoReplyTemplate"
+                value={whatsappAutoReplyTemplate}
+                onChange={(e) => setWhatsappAutoReplyTemplate(e.target.value)}
+                disabled={!whatsappAppointmentMessaging || !whatsappAutoReplyEnabled}
+                placeholder="e.g. clinic_welcome_reply"
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Exact approved template name from WhatsApp Manager. Language uses{' '}
+                <code className="rounded bg-slate-100 px-1">WHATSAPP_TEMPLATE_LANGUAGE</code> on
+                the server.
+              </p>
+            </div>
 
           </CardContent>
 

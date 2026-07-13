@@ -88,8 +88,11 @@ export function BookingCard({
   const color = getBookingStaffColor(booking);
   const isConsultation = booking.bookingType === 'CONSULTATION';
   const isInactive = ['CANCELLED', 'RESCHEDULED', 'COMPLETED', 'NO_SHOW'].includes(booking.status);
+  // Consultation bookings are create/cancel/complete only (no edit/postpone UI yet).
   const editable =
-    showActionsMenu && (canEditBooking(booking) || isCompletedBookingEdit(booking));
+    showActionsMenu &&
+    !isConsultation &&
+    (canEditBooking(booking) || isCompletedBookingEdit(booking));
   const cancellable = showActionsMenu && canCancelBooking(booking) && onCancel;
   const showActions = editable || cancellable;
   const staffName = isConsultation

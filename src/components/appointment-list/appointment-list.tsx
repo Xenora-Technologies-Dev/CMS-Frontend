@@ -88,14 +88,17 @@ export function AppointmentList() {
     beginLoad(options);
     setError(null);
     try {
+      const isConsultation = filters.bookingType === 'CONSULTATION';
       const params = {
         page,
         limit,
         sort: 'default' as const,
+        bookingType: filters.bookingType,
         patientName: debouncedPatientName || undefined,
         patientPhone: debouncedPatientPhone || undefined,
-        therapistId: filters.therapistId || undefined,
-        therapyId: filters.therapyId || undefined,
+        therapistId: !isConsultation ? filters.therapistId || undefined : undefined,
+        therapyId: !isConsultation ? filters.therapyId || undefined : undefined,
+        doctorId: isConsultation ? filters.doctorId || undefined : undefined,
         statusGroup: filters.statusGroup !== 'ALL' ? filters.statusGroup : undefined,
         excludeStatuses:
           filters.statusGroup === 'ALL'
@@ -121,8 +124,10 @@ export function AppointmentList() {
     limit,
     debouncedPatientName,
     debouncedPatientPhone,
+    filters.bookingType,
     filters.therapistId,
     filters.therapyId,
+    filters.doctorId,
     filters.statusGroup,
     filters.dateFrom,
     filters.dateTo,
@@ -148,8 +153,10 @@ export function AppointmentList() {
   }, [
     debouncedPatientName,
     debouncedPatientPhone,
+    filters.bookingType,
     filters.therapistId,
     filters.therapyId,
+    filters.doctorId,
     filters.statusGroup,
     filters.dateFrom,
     filters.dateTo,
@@ -242,6 +249,7 @@ export function AppointmentList() {
       <AppointmentListFilters
         filters={filters}
         therapists={therapists}
+        doctors={doctors}
         therapies={therapies}
         loading={refreshing}
         onChange={setFilters}

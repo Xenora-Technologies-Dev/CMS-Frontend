@@ -899,21 +899,15 @@ export function BookingDetailDialog({
               </div>
             )}
             {!isStaffView &&
-              isConsultation &&
               onCancel &&
+              !canModifyActions &&
               ['SCHEDULED', 'CONFIRMED', 'PENDING_CONFIRMATION', 'COMPLETED'].includes(
                 booking.status,
-              ) &&
-              !canModifyActions && (
+              ) && (
                 <Button variant="destructive" className="w-full" onClick={onCancel}>
                   Cancel
                 </Button>
               )}
-            {!isStaffView && booking.status === 'COMPLETED' && onCancel && !isConsultation && (
-              <Button variant="destructive" className="w-full" onClick={onCancel}>
-                Cancel
-              </Button>
-            )}
             {!isStaffView && booking.status === 'CANCELLED' && onRestore && (
               <Button variant="outline" className="w-full" onClick={onRestore}>
                 <RotateCcw className="mr-2 h-4 w-4" />
