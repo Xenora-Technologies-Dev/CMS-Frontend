@@ -8,6 +8,7 @@ export const SocketEvents = {
   PACKAGE_CREATED: 'package:created',
   PACKAGE_COMPLETED: 'package:completed',
   LEAVE_CONFLICT: 'leave:conflict',
+  WHATSAPP_INBOUND: 'whatsapp:inbound',
 } as const;
 
 export type SocketEventName = (typeof SocketEvents)[keyof typeof SocketEvents];

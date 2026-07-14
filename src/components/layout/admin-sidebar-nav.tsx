@@ -10,6 +10,7 @@ import {
   isNavLinkActive,
   isPathActive,
 } from '@/config/admin-navigation';
+import { useWhatsAppInboxAlert } from '@/components/whatsapp/whatsapp-inbox-alert-provider';
 import { getDefaultOpenGroups } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -42,10 +43,12 @@ function NavLinkItem({
   item,
   pathname,
   onNavigate,
+  highlight,
 }: {
   item: AdminNavLink;
   pathname: string;
   onNavigate?: () => void;
+  highlight?: boolean;
 }) {
   const active = isNavLinkActive(pathname, item);
   const Icon = item.icon;
@@ -58,11 +61,23 @@ function NavLinkItem({
         'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
         active
           ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
-          : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+          : highlight
+            ? 'bg-emerald-500/15 text-emerald-800 ring-1 ring-emerald-400/50 hover:bg-emerald-500/20'
+            : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
       )}
     >
-      <Icon className="h-4 w-4 shrink-0" />
-      <span>{item.title}</span>
+      <span className="relative shrink-0">
+        <Icon className="h-4 w-4" />
+        {highlight && !active && (
+          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-500" />
+        )}
+      </span>
+      <span className="flex-1">{item.title}</span>
+      {highlight && !active && (
+        <span className="rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+          New
+        </span>
+      )}
     </Link>
   );
 }
@@ -129,18 +144,26 @@ function NavSection({
   openGroups,
   setGroupOpen,
   onNavigate,
+  whatsappUnread,
 }: {
   items: AdminNavItem[];
   pathname: string;
   openGroups: Record<string, boolean>;
   setGroupOpen: (title: string, open: boolean) => void;
   onNavigate?: () => void;
+  whatsappUnread?: boolean;
 }) {
   return (
     <div className="space-y-0.5">
       {items.map((item) =>
         item.type === 'link' ? (
-          <NavLinkItem key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />
+          <NavLinkItem
+            key={item.href}
+            item={item}
+            pathname={pathname}
+            onNavigate={onNavigate}
+            highlight={whatsappUnread && item.href === '/admin/whatsapp-messages'}
+          />
         ) : (
           <NavGroupItem
             key={item.title}
@@ -158,6 +181,7 @@ function NavSection({
 
 export function AdminSidebarNav({ onNavigate, className }: AdminSidebarNavProps) {
   const pathname = usePathname();
+  const { hasUnread } = useWhatsAppInboxAlert();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -184,6 +208,7 @@ export function AdminSidebarNav({ onNavigate, className }: AdminSidebarNavProps)
           openGroups={openGroups}
           setGroupOpen={setGroupOpen}
           onNavigate={onNavigate}
+          whatsappUnread={hasUnread}
         />
         <Separator className="bg-sidebar-border" />
         <NavSection

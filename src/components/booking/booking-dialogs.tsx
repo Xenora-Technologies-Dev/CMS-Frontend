@@ -600,6 +600,8 @@ interface BookingDetailDialogProps {
   onComplete?: () => void | Promise<void>;
   /** When set, hides admin-only actions and uses read-only staff view. */
   viewerRole?: 'admin' | 'therapist' | 'doctor';
+  /** Logged-in doctor's id — used to detect self bookings for comments/history. */
+  selfDoctorId?: string;
   /** Called after a comment is posted on the booking. */
   onCommentPosted?: () => void;
 }
@@ -614,6 +616,7 @@ export function BookingDetailDialog({
   onRestore,
   onComplete,
   viewerRole = 'admin',
+  selfDoctorId,
   onCommentPosted,
 }: BookingDetailDialogProps) {
   const [slipOpen, setSlipOpen] = useState(false);
@@ -676,15 +679,25 @@ export function BookingDetailDialog({
 
   const isStaffView = viewerRole === 'therapist' || viewerRole === 'doctor';
   const isConsultation = booking.bookingType === 'CONSULTATION';
+  const isSelfBooking =
+    viewerRole === 'doctor' &&
+    Boolean(selfDoctorId) &&
+    booking.doctorId === selfDoctorId;
   const canEdit =
     !isStaffView && !isConsultation && canRequestBookingEdit(booking);
   const canPostpone =
     !isStaffView && !isConsultation && canEditBooking(booking);
   const canModifyActions = canEdit || canPostpone;
   const canComplete = !isStaffView && onComplete && canCompleteBooking(booking);
-  const canComment = ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED'].includes(
+  const statusAllowsComment = ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED'].includes(
     booking.status,
   );
+  // Doctors may comment only on their own consultations; therapists/admins keep existing rules.
+  const canComment =
+    statusAllowsComment &&
+    (viewerRole !== 'doctor' || isSelfBooking);
+  const showVisitHistory = viewerRole !== 'doctor' || isSelfBooking;
+  const showAppointmentSlip = viewerRole !== 'doctor' || isSelfBooking;
 
   return (
     <>
@@ -699,6 +712,16 @@ export function BookingDetailDialog({
               <dt className="shrink-0 text-muted-foreground">Status</dt>
               <dd>
                 <BookingStatusBadge status={booking.status} />
+              </dd>
+            </div>
+            <div className="flex items-start justify-between gap-4">
+              <dt className="shrink-0 text-muted-foreground">Date</dt>
+              <dd className="text-right font-medium">
+                {new Date(booking.startTime).toLocaleDateString('en-GB', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                })}
               </dd>
             </div>
             {isConsultation ? (
@@ -774,10 +797,11 @@ export function BookingDetailDialog({
                   bookingId={booking.id}
                   canComment={canComment}
                   viewerRole={viewerRole}
+                  patientScope={viewerRole === 'doctor' && isSelfBooking}
                 />
               </div>
             )}
-            {patientHistory.length > 0 && (
+            {showVisitHistory && patientHistory.length > 0 && (
               <div className="border-t pt-3">
                 <dt className="mb-2 flex items-center gap-1.5 font-medium text-slate-700">
                   <History className="h-4 w-4" />
@@ -866,14 +890,16 @@ export function BookingDetailDialog({
                   </Link>
                 </Button>
               )}
-              <Button
-                variant="secondary"
-                className="w-full"
-                onClick={() => setSlipOpen(true)}
-              >
-                <FileText className="mr-2 h-4 w-4" />
-                Appointment Slip
-              </Button>
+              {showAppointmentSlip && (
+                <Button
+                  variant="secondary"
+                  className={cn('w-full', isStaffView && 'sm:col-span-2')}
+                  onClick={() => setSlipOpen(true)}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Appointment Slip
+                </Button>
+              )}
             </div>
 
             {canModifyActions && onCancel && (

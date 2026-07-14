@@ -60,6 +60,13 @@ export interface ListWebhookActivityParams {
   dateTo?: string;
 }
 
+export async function unlockWebhookActivity(password: string): Promise<{ unlocked: boolean }> {
+  return apiRequest<{ unlocked: boolean }>('/webhook-activity/unlock', {
+    method: 'POST',
+    body: { password },
+  });
+}
+
 export async function checkWebhookEndpoint(): Promise<WebhookEndpointCheckResult> {
   return apiRequest<WebhookEndpointCheckResult>('/webhook-activity/check-endpoint', {
     method: 'POST',

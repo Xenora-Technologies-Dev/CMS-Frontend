@@ -439,6 +439,7 @@ export function ConsultationBookingCalendar({
         }}
         onComplete={lockedDoctorId ? undefined : handleComplete}
         viewerRole={lockedDoctorId ? 'doctor' : 'admin'}
+        selfDoctorId={lockedDoctorId}
       />
 
       <CreateConsultationBookingModal

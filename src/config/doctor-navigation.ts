@@ -30,7 +30,10 @@ export const DOCTOR_NAV_MAIN: DoctorNavItem[] = [
     type: 'group',
     title: 'Appointments',
     icon: CalendarDays,
-    items: [{ title: 'My Calendar', href: '/doctor/calendar' }],
+    items: [
+      { title: 'My Calendar', href: '/doctor/calendar' },
+      { title: 'All Appointments', href: '/doctor/appointments' },
+    ],
   },
   {
     type: 'link',
@@ -64,6 +67,10 @@ const PAGE_META: Record<string, DoctorPageMeta> = {
   '/doctor/calendar': {
     title: 'My Calendar',
     description: 'View your scheduled consultations.',
+  },
+  '/doctor/appointments': {
+    title: 'All Appointments',
+    description: 'View all clinic appointments. Comment and visit history are available on your own bookings.',
   },
   '/doctor/user-guide': {
     title: 'User Guide',

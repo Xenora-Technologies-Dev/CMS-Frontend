@@ -10,6 +10,7 @@ import {
   HeartPulse,
   History,
   LayoutDashboard,
+  MessageCircle,
   Palmtree,
   Radio,
   Shield,
@@ -142,6 +143,12 @@ export const ADMIN_NAV_MAIN: AdminNavItem[] = [
     href: '/admin/activity-log',
     icon: History,
   },
+  {
+    type: 'link',
+    title: 'WhatsApp Messages',
+    href: '/admin/whatsapp-messages',
+    icon: MessageCircle,
+  },
   ...(enableWebhookActivity
     ? ([
         {
@@ -252,6 +259,10 @@ const PAGE_META: Record<string, AdminPageMeta> = {
   '/admin/activity-log': {
     title: 'Activity Log',
     description: 'Audit trail of clinic actions and changes.',
+  },
+  '/admin/whatsapp-messages': {
+    title: 'WhatsApp Messages',
+    description: 'View automated appointment notifications, patient replies, and auto-replies.',
   },
   '/admin/webhook-activity': {
     title: 'Webhook Activity',

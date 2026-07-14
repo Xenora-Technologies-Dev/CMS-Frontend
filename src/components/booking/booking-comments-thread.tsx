@@ -11,12 +11,21 @@ interface BookingCommentsThreadProps {
   bookingId: string;
   canComment: boolean;
   viewerRole: 'admin' | 'therapist' | 'doctor';
+  /** When true, load all comments across the patient's bookings (doctor self-booking). */
+  patientScope?: boolean;
+}
+
+function authorRoleLabel(role: BookingComment['author']['role']): string {
+  if (role === 'THERAPIST') return 'Therapist';
+  if (role === 'DOCTOR') return 'Doctor';
+  return 'Admin';
 }
 
 export function BookingCommentsThread({
   bookingId,
   canComment,
   viewerRole,
+  patientScope = false,
 }: BookingCommentsThreadProps) {
   const [comments, setComments] = useState<BookingComment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,14 +36,14 @@ export function BookingCommentsThread({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { comments: rows } = await listBookingComments(bookingId);
+      const { comments: rows } = await listBookingComments(bookingId, { patientScope });
       setComments(rows);
     } catch {
       setComments([]);
     } finally {
       setLoading(false);
     }
-  }, [bookingId]);
+  }, [bookingId, patientScope]);
 
   useEffect(() => {
     void load();
@@ -58,7 +67,14 @@ export function BookingCommentsThread({
 
   return (
     <div className="space-y-3 border-t pt-3">
-      <p className="text-sm font-medium text-slate-900">Session Comments</p>
+      <p className="text-sm font-medium text-slate-900">
+        {patientScope ? 'Patient Comments' : 'Session Comments'}
+      </p>
+      {patientScope && (
+        <p className="text-xs text-muted-foreground">
+          All comments across this patient&apos;s appointments.
+        </p>
+      )}
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -72,7 +88,7 @@ export function BookingCommentsThread({
             <div
               key={comment.id}
               className={`rounded-lg border p-3 ${
-                comment.author.role === 'THERAPIST'
+                comment.author.role === 'THERAPIST' || comment.author.role === 'DOCTOR'
                   ? 'border-primary/20 bg-primary/5'
                   : 'border-slate-200 bg-slate-50'
               }`}
@@ -81,13 +97,22 @@ export function BookingCommentsThread({
                 <p className="text-sm font-medium text-slate-900">
                   {comment.author.firstName} {comment.author.lastName}
                   <span className="ml-2 text-xs font-normal text-muted-foreground">
-                    {comment.author.role === 'THERAPIST' ? 'Therapist' : 'Admin'}
+                    {authorRoleLabel(comment.author.role)}
                   </span>
                 </p>
                 <span className="text-xs text-muted-foreground">
                   {formatDateTime(comment.createdAt)}
                 </span>
               </div>
+              {patientScope && comment.booking && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {comment.booking.bookingType === 'CONSULTATION'
+                    ? 'Consultation'
+                    : comment.booking.therapy?.name ?? 'Therapy'}
+                  {' · '}
+                  {formatDateTime(comment.booking.startTime)}
+                </p>
+              )}
               <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{comment.content}</p>
             </div>
           ))}
@@ -100,8 +125,8 @@ export function BookingCommentsThread({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={
-              viewerRole === 'therapist'
-                ? 'Add a session comment (admins will be notified)…'
+              viewerRole === 'therapist' || viewerRole === 'doctor'
+                ? 'Add a comment (admins will be notified)…'
                 : 'Add a comment…'
             }
             rows={3}

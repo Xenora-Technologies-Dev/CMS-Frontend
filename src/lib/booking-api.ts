@@ -109,7 +109,11 @@ export async function updateBookingNotes(
 export async function fetchBookingsForDate(
   date: Date,
   limit = 100,
-  options?: { bookingType?: 'THERAPY' | 'CONSULTATION'; doctorId?: string },
+  options?: {
+    bookingType?: 'THERAPY' | 'CONSULTATION';
+    doctorId?: string;
+    viewAll?: boolean;
+  },
 ): Promise<Booking[]> {
   const params = new URLSearchParams({
     dateFrom: startOfDay(date).toISOString(),
@@ -119,6 +123,7 @@ export async function fetchBookingsForDate(
   });
   if (options?.bookingType) params.set('bookingType', options.bookingType);
   if (options?.doctorId) params.set('doctorId', options.doctorId);
+  if (options?.viewAll) params.set('viewAll', 'true');
   const result = await apiRequestPaginated<Booking>(`/bookings?${params.toString()}`);
   return result.data;
 }
@@ -138,12 +143,20 @@ export interface BookingComment {
     lastName: string;
     role: 'ADMIN' | 'THERAPIST' | 'DOCTOR';
   };
+  booking?: {
+    id: string;
+    startTime: string;
+    bookingType: 'THERAPY' | 'CONSULTATION';
+    therapy?: { name: string } | null;
+  };
 }
 
 export async function listBookingComments(
   bookingId: string,
+  options?: { patientScope?: boolean },
 ): Promise<{ comments: BookingComment[] }> {
-  return apiRequest<{ comments: BookingComment[] }>(`/bookings/${bookingId}/comments`);
+  const qs = options?.patientScope ? '?patientScope=true' : '';
+  return apiRequest<{ comments: BookingComment[] }>(`/bookings/${bookingId}/comments${qs}`);
 }
 
 export async function createBookingComment(

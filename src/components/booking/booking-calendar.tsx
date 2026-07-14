@@ -64,6 +64,10 @@ function roomBookingType(room: Room | undefined): BookingType {
 
 interface BookingCalendarProps {
   lockedTherapistId?: string;
+  /** Doctor All Appointments — clinic-wide read-only calendar. */
+  doctorViewAll?: boolean;
+  /** Logged-in doctor id for self-booking comments/history. */
+  selfDoctorId?: string;
   hideTitle?: boolean;
   pageTitle?: string;
   pageDescription?: string;
@@ -71,11 +75,14 @@ interface BookingCalendarProps {
 
 export function BookingCalendar({
   lockedTherapistId,
+  doctorViewAll,
+  selfDoctorId,
   hideTitle,
   pageTitle = 'Bookings',
   pageDescription = 'Daily view · therapy rooms then consultation rooms · staff color coding',
 }: BookingCalendarProps = {}) {
   const unified = !lockedTherapistId;
+  const readOnly = Boolean(lockedTherapistId || doctorViewAll);
   const { showBookingAction } = useToast();
   const { notifyAfterBookingAction } = useBookingWhatsApp();
   const clinicContext = useClinicOptional();
@@ -175,8 +182,14 @@ export function BookingCalendar({
             therapyResult,
             holidayResult,
           ] = await Promise.all([
-            fetchBookingsForDate(selectedDate, RESOURCE_LIMIT, { bookingType: 'THERAPY' }),
-            fetchBookingsForDate(selectedDate, RESOURCE_LIMIT, { bookingType: 'CONSULTATION' }),
+            fetchBookingsForDate(selectedDate, RESOURCE_LIMIT, {
+              bookingType: 'THERAPY',
+              viewAll: doctorViewAll || undefined,
+            }),
+            fetchBookingsForDate(selectedDate, RESOURCE_LIMIT, {
+              bookingType: 'CONSULTATION',
+              viewAll: doctorViewAll || undefined,
+            }),
             listTherapists({ limit: RESOURCE_LIMIT, isActive: true }),
             listDoctors({ limit: RESOURCE_LIMIT, isActive: true }),
             listRooms({ limit: RESOURCE_LIMIT, isActive: true, roomType: 'THERAPY' }),
@@ -232,7 +245,7 @@ export function BookingCalendar({
         setRefreshing(false);
       }
     },
-    [selectedDate, lockedTherapistId, unified],
+    [selectedDate, lockedTherapistId, unified, doctorViewAll],
   );
 
   useEffect(() => {
@@ -418,7 +431,7 @@ export function BookingCalendar({
       >
         <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
       </Button>
-      {!lockedTherapistId && (
+      {!readOnly && (
         <Button
           size="sm"
           className="h-8"
@@ -486,15 +499,15 @@ export function BookingCalendar({
                   {filteredBookings.length === 1 ? '' : 's'}
                   {hasActiveFilters && ' (filtered)'}
                   {refreshing && ' · Updating…'}
-                  {!lockedTherapistId && ' · Click an empty cell to book · Hover a booking for actions'}
-                  {lockedTherapistId && ' · View-only schedule'}
+                  {!readOnly && ' · Click an empty cell to book · Hover a booking for actions'}
+                  {readOnly && ' · View-only schedule'}
                 </p>
               </div>
               <div className="hidden shrink-0 items-center gap-2 xl:flex">{dateToolbarActions}</div>
             </div>
           </div>
 
-          {!lockedTherapistId && (
+          {!readOnly && (
             <div className="rounded-lg border bg-white p-3 shadow-sm">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -563,9 +576,9 @@ export function BookingCalendar({
               holidays={holidays}
               onSelectBooking={handleSelectBooking}
               onEmptySlotClick={
-                !lockedTherapistId && resourcesReady ? handleEmptySlotClick : undefined
+                !readOnly && resourcesReady ? handleEmptySlotClick : undefined
               }
-              showBookingActions={!lockedTherapistId}
+              showBookingActions={!readOnly}
               onEditBooking={openEditFromCard}
               onPostponeBooking={openPostponeFromCard}
               onCancelBooking={openCancelFromCard}
@@ -578,18 +591,27 @@ export function BookingCalendar({
         booking={selectedBooking}
         open={detailOpen}
         onOpenChange={setDetailOpen}
-        onEdit={openEdit}
-        onReschedule={() => {
-          if (selectedBooking?.bookingType === 'CONSULTATION') return;
-          setDetailOpen(false);
-          setRescheduleOpen(true);
-        }}
-        onCancel={() => {
-          setDetailOpen(false);
-          setCancelOpen(true);
-        }}
-        onComplete={lockedTherapistId ? undefined : handleComplete}
-        viewerRole={lockedTherapistId ? 'therapist' : 'admin'}
+        onEdit={readOnly ? undefined : openEdit}
+        onReschedule={
+          readOnly
+            ? undefined
+            : () => {
+                if (selectedBooking?.bookingType === 'CONSULTATION') return;
+                setDetailOpen(false);
+                setRescheduleOpen(true);
+              }
+        }
+        onCancel={
+          readOnly
+            ? undefined
+            : () => {
+                setDetailOpen(false);
+                setCancelOpen(true);
+              }
+        }
+        onComplete={readOnly ? undefined : handleComplete}
+        viewerRole={doctorViewAll ? 'doctor' : lockedTherapistId ? 'therapist' : 'admin'}
+        selfDoctorId={selfDoctorId}
       />
 
       <BookingFormModal

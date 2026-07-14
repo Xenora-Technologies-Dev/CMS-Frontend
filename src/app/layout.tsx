@@ -7,6 +7,7 @@ import { NotificationsProvider } from '@/components/providers/notifications-prov
 import { SocketProvider } from '@/components/providers/socket-provider';
 import { ToastProvider } from '@/components/providers/toast-provider';
 import { BookingWhatsAppProvider } from '@/components/whatsapp/booking-whatsapp-provider';
+import { WhatsAppInboxAlertProvider } from '@/components/whatsapp/whatsapp-inbox-alert-provider';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -28,7 +29,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <BookingWhatsAppProvider>
               <SocketProvider>
                 <NotificationsProvider>
-                  <ToastProvider>{children}</ToastProvider>
+                  <WhatsAppInboxAlertProvider>
+                    <ToastProvider>{children}</ToastProvider>
+                  </WhatsAppInboxAlertProvider>
                 </NotificationsProvider>
               </SocketProvider>
             </BookingWhatsAppProvider>

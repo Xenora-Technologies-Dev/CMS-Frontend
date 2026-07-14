@@ -3,6 +3,14 @@
 import { PaginationControls } from '@/components/shared/pagination-controls';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { enableWebhookActivity } from '@/lib/feature-flags';
@@ -12,6 +20,7 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import {
   checkWebhookEndpoint,
   listWebhookActivity,
+  unlockWebhookActivity,
   type WebhookActivityConfig,
   type WebhookActivityItem,
   type WebhookEndpointCheckResult,
@@ -21,6 +30,7 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  Lock,
   MessageSquareText,
   Radio,
   Search,
@@ -28,7 +38,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
-import { notFound } from 'next/navigation';
+import { notFound, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 const DEFAULT_META: PaginatedMeta = { page: 1, limit: 15, total: 0, totalPages: 0 };
@@ -188,10 +198,23 @@ export default function WebhookActivityPage() {
 }
 
 function WebhookActivityPageContent() {
+  const router = useRouter();
+  // Password is required on every visit (no session persistence).
+  const [unlocked, setUnlocked] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(true);
+  const [password, setPassword] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+
+  function dismissPasswordPrompt() {
+    setPasswordOpen(false);
+    router.push('/admin');
+  }
+
   const [events, setEvents] = useState<WebhookActivityItem[]>([]);
   const [meta, setMeta] = useState<PaginatedMeta>(DEFAULT_META);
   const [config, setConfig] = useState<WebhookActivityConfig>(DEFAULT_CONFIG);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [eventKind, setEventKind] = useState('');
@@ -232,8 +255,25 @@ function WebhookActivityPageContent() {
   );
 
   useEffect(() => {
+    if (!unlocked) return;
     void load(1);
-  }, [load]);
+  }, [unlocked, load]);
+
+  async function handleUnlock(e: React.FormEvent) {
+    e.preventDefault();
+    setUnlocking(true);
+    setUnlockError(null);
+    try {
+      await unlockWebhookActivity(password);
+      setUnlocked(true);
+      setPasswordOpen(false);
+      setPassword('');
+    } catch (err) {
+      setUnlockError(err instanceof Error ? err.message : 'Incorrect password');
+    } finally {
+      setUnlocking(false);
+    }
+  }
 
   function clearFilters() {
     setSearch('');
@@ -266,6 +306,76 @@ function WebhookActivityPageContent() {
     } finally {
       setCheckingEndpoint(false);
     }
+  }
+
+  if (!unlocked) {
+    return (
+      <div className="mx-auto max-w-lg space-y-6">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10">
+                <Lock className="h-5 w-5 text-emerald-700" />
+              </div>
+              <div>
+                <CardTitle>Webhook Activity</CardTitle>
+                <CardDescription>Enter the developer password to continue.</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
+
+        <Dialog
+          open={passwordOpen && !unlocked}
+          onOpenChange={(open) => {
+            if (!open && !unlocked) {
+              dismissPasswordPrompt();
+              return;
+            }
+            setPasswordOpen(open);
+          }}
+        >
+          <DialogContent>
+            <form onSubmit={(e) => void handleUnlock(e)}>
+              <DialogHeader>
+                <DialogTitle>Enter password</DialogTitle>
+                <DialogDescription>
+                  Webhook Activity is password protected. You will be asked again the next time you
+                  open this page.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2 py-4">
+                <Label htmlFor="webhook-activity-password">Password</Label>
+                <Input
+                  id="webhook-activity-password"
+                  type="password"
+                  autoFocus
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter access password"
+                />
+                {unlockError && <p className="text-sm text-destructive">{unlockError}</p>}
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={dismissPasswordPrompt}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={unlocking || !password.trim()}>
+                  {unlocking ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Unlocking…
+                    </>
+                  ) : (
+                    'Unlock'
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
   }
 
   return (
@@ -371,7 +481,10 @@ function WebhookActivityPageContent() {
               <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 Callback URL
               </p>
-              <p className="truncate text-sm font-medium text-slate-900" title={config.callbackUrl ?? undefined}>
+              <p
+                className="truncate text-sm font-medium text-slate-900"
+                title={config.callbackUrl ?? undefined}
+              >
                 {config.callbackUrl ?? 'Set WHATSAPP_WEBHOOK_BASE_URL'}
               </p>
             </div>
